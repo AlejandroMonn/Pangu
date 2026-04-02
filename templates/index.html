@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chaos-Triage</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Sora', 'ui-sans-serif', 'system-ui']
+            },
+            boxShadow: {
+              glow: '0 0 0 1px rgba(255,255,255,0.08), 0 10px 35px rgba(0,0,0,0.45)'
+            },
+            keyframes: {
+              fadeUp: {
+                '0%': { opacity: '0', transform: 'translateY(14px)' },
+                '100%': { opacity: '1', transform: 'translateY(0px)' }
+              }
+            },
+            animation: {
+              fadeUp: 'fadeUp 450ms ease-out both'
+            }
+          }
+        }
+      };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
+    <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+      <div class="absolute -top-36 left-1/2 h-[28rem] w-[28rem] -translate-x-1/2 rounded-full bg-cyan-500/20 blur-3xl"></div>
+      <div class="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-orange-500/10 blur-3xl"></div>
+      <div class="absolute left-0 top-1/2 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl"></div>
+    </div>
+
+    <main class="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+      <section class="mx-auto max-w-4xl animate-fadeUp">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-glow backdrop-blur-xl sm:p-8">
+          <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p class="text-xs uppercase tracking-[0.22em] text-cyan-300">Chaos-Triage</p>
+              <h1 class="mt-1 text-3xl font-semibold leading-tight text-white sm:text-4xl">Turn your brain dump into a calmer plan for the day</h1>
+            </div>
+            <span class="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100">Local + Private</span>
+          </div>
+
+          <label for="brainDump" class="mb-2 block text-sm text-slate-300">Drop every messy thought here</label>
+          <textarea
+            id="brainDump"
+            rows="10"
+            placeholder="Example: finish deploy, test onboarding flow, watch 2 YouTube videos, clean hamster cage, catch up lecture notes... Each comma becomes a new task seed."
+            class="w-full resize-y rounded-2xl border border-white/10 bg-slate-900/70 p-4 text-slate-100 placeholder-slate-500 outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
+          ></textarea>
+
+          <div class="mt-5 flex flex-wrap items-center gap-3">
+            <button
+              id="organizeBtn"
+              class="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span id="btnText">Organize My Chaos</span>
+              <svg id="btnSpinner" class="hidden h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.25" stroke-width="4"></circle>
+                <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" stroke-width="4" stroke-linecap="round"></path>
+              </svg>
+            </button>
+            <p class="text-xs text-slate-400">Powered by your local Ollama model.</p>
+          </div>
+
+          <p id="errorMsg" class="mt-4 hidden rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200"></p>
+          <p class="mt-3 text-xs text-slate-500">Tip: use commas to separate tasks. The app treats each comma chunk as a task seed, then only splits very obvious multi-action phrases.</p>
+        </div>
+      </section>
+
+      <section id="resultsSection" class="mx-auto mt-10 hidden max-w-7xl animate-fadeUp">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-glow backdrop-blur-xl sm:p-8">
+          <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p class="text-xs uppercase tracking-[0.22em] text-cyan-300">Human Plan</p>
+              <h2 class="mt-1 text-3xl font-semibold text-white">A clearer way to move through the day</h2>
+              <p id="summaryText" class="mt-2 max-w-3xl text-sm text-slate-300"></p>
+            </div>
+            <span id="modelTag" class="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-slate-300"></span>
+          </div>
+
+          <div class="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+            <div class="rounded-2xl border border-cyan-300/20 bg-cyan-300/10 p-4">
+              <p class="text-[11px] uppercase tracking-[0.18em] text-cyan-100">Now</p>
+              <p id="summaryNow" class="mt-2 text-sm font-medium text-white"></p>
+            </div>
+            <div class="rounded-2xl border border-white/10 bg-slate-900/55 p-4">
+              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Next</p>
+              <p id="summaryNext" class="mt-2 text-sm font-medium text-white"></p>
+            </div>
+            <div class="rounded-2xl border border-white/10 bg-slate-900/55 p-4">
+              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Later</p>
+              <p id="summaryLater" class="mt-2 text-sm font-medium text-white"></p>
+            </div>
+            <div class="rounded-2xl border border-amber-300/20 bg-amber-300/10 p-4">
+              <p class="text-[11px] uppercase tracking-[0.18em] text-amber-100">Doing</p>
+              <p id="summaryDoing" class="mt-2 text-sm font-medium text-white"></p>
+            </div>
+            <div class="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4">
+              <p class="text-[11px] uppercase tracking-[0.18em] text-emerald-100">Done</p>
+              <p id="summaryDone" class="mt-2 text-sm font-medium text-white"></p>
+            </div>
+            <div class="rounded-2xl border border-white/10 bg-slate-900/55 p-4">
+              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Filter</p>
+              <p id="summaryFilter" class="mt-2 text-sm font-medium text-white"></p>
+            </div>
+          </div>
+
+          <div class="mb-6 rounded-3xl border border-white/10 bg-slate-900/55 p-5">
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Human Plan</p>
+                <h3 id="coachIntro" class="mt-1 text-2xl font-semibold text-white"></h3>
+              </div>
+              <span id="coachMode" class="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-slate-300"></span>
+            </div>
+
+            <div class="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+              <div class="rounded-2xl border border-cyan-300/20 bg-gradient-to-br from-cyan-400/12 via-slate-900/50 to-slate-900/70 p-4">
+                <p class="text-[11px] uppercase tracking-[0.18em] text-cyan-100">Empieza por esto</p>
+                <p id="coachFocus" class="mt-2 text-sm leading-6 text-slate-100"></p>
+              </div>
+              <div class="rounded-2xl border border-orange-300/20 bg-orange-300/10 p-4">
+                <p class="text-[11px] uppercase tracking-[0.18em] text-orange-100">Caution</p>
+                <p id="coachCaution" class="mt-2 text-sm leading-6 text-slate-100"></p>
+              </div>
+            </div>
+
+            <div class="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Coach Steps</p>
+              <ol id="coachSteps" class="mt-3 space-y-3 text-sm text-slate-200"></ol>
+            </div>
+          </div>
+
+          <div class="mb-6 rounded-2xl border border-white/10 bg-slate-900/45 p-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 class="text-sm font-semibold text-white">Topic Filters</h3>
+                <p class="text-xs text-slate-400">Focus on one area or keep the whole board visible.</p>
+              </div>
+              <div id="filterBar" class="flex flex-wrap gap-2"></div>
+            </div>
+          </div>
+
+          <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <p class="text-sm text-slate-300">Drag cards between columns to shape the real order of your day.</p>
+            <p id="boardHint" class="text-xs text-slate-500"></p>
+          </div>
+
+          <div class="grid gap-4 xl:grid-cols-3">
+            <section class="rounded-2xl border border-cyan-300/20 bg-slate-900/50 p-4">
+              <div class="mb-4">
+                <h3 class="text-lg font-semibold text-white">Backlog</h3>
+                <p class="text-xs text-slate-400">Suggested order, but fully yours to reshape.</p>
+              </div>
+              <div id="backlogList" data-column="backlog" class="space-y-3 min-h-[8rem]"></div>
+            </section>
+
+            <section class="rounded-2xl border border-amber-300/20 bg-slate-900/50 p-4">
+              <div class="mb-4">
+                <h3 class="text-lg font-semibold text-white">In Progress</h3>
+                <p class="text-xs text-slate-400">Only the cards you intentionally pulled into motion.</p>
+              </div>
+              <div id="progressList" data-column="in_progress" class="space-y-3 min-h-[8rem]"></div>
+            </section>
+
+            <section class="rounded-2xl border border-emerald-300/20 bg-slate-900/50 p-4">
+              <div class="mb-4">
+                <h3 class="text-lg font-semibold text-white">Done</h3>
+                <p class="text-xs text-slate-400">Keep wins visible. Momentum matters.</p>
+              </div>
+              <div id="doneList" data-column="done" class="space-y-3 min-h-[8rem]"></div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const CATEGORY_META = {
+        personal_space: { label: 'Personal Space', border: 'border-emerald-300/30', pill: 'bg-emerald-400/15 text-emerald-100' },
+        university: { label: 'University', border: 'border-amber-300/30', pill: 'bg-amber-400/15 text-amber-100' },
+        kinetiq_business: { label: 'Kinetiq Business', border: 'border-cyan-300/30', pill: 'bg-cyan-400/15 text-cyan-100' },
+        consumption: { label: 'Consumption', border: 'border-fuchsia-300/30', pill: 'bg-fuchsia-400/15 text-fuchsia-100' }
+      };
+
+      const COLUMN_META = {
+        backlog: { label: 'Backlog', empty: 'No hay tareas en backlog con este filtro.' },
+        in_progress: { label: 'In Progress', empty: 'Arrastra una tarjeta aqui cuando realmente la empieces.' },
+        done: { label: 'Done', empty: 'Las tareas terminadas apareceran aqui.' }
+      };
+
+      const URGENCY_STYLE = {
+        high: 'bg-rose-500/15 text-rose-200 border-rose-400/30',
+        medium: 'bg-amber-500/15 text-amber-200 border-amber-400/30',
+        low: 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30'
+      };
+
+      const brainDump = document.getElementById('brainDump');
+      const organizeBtn = document.getElementById('organizeBtn');
+      const btnText = document.getElementById('btnText');
+      const btnSpinner = document.getElementById('btnSpinner');
+      const errorMsg = document.getElementById('errorMsg');
+      const resultsSection = document.getElementById('resultsSection');
+      const summaryText = document.getElementById('summaryText');
+      const modelTag = document.getElementById('modelTag');
+      const summaryNow = document.getElementById('summaryNow');
+      const summaryNext = document.getElementById('summaryNext');
+      const summaryLater = document.getElementById('summaryLater');
+      const summaryDoing = document.getElementById('summaryDoing');
+      const summaryDone = document.getElementById('summaryDone');
+      const summaryFilter = document.getElementById('summaryFilter');
+      const coachIntro = document.getElementById('coachIntro');
+      const coachMode = document.getElementById('coachMode');
+      const coachFocus = document.getElementById('coachFocus');
+      const coachCaution = document.getElementById('coachCaution');
+      const coachSteps = document.getElementById('coachSteps');
+      const filterBar = document.getElementById('filterBar');
+      const boardHint = document.getElementById('boardHint');
+      const backlogList = document.getElementById('backlogList');
+      const progressList = document.getElementById('progressList');
+      const doneList = document.getElementById('doneList');
+
+      let currentPlan = null;
+      let initialCoach = null;
+      let taskMap = new Map();
+      let boardState = { backlog: [], in_progress: [], done: [] };
+      let taskStatus = {};
+      let expandedState = {};
+      let currentFilter = 'all';
+      let hasInteracted = false;
+      let sortables = [];
+
+      function setLoading(isLoading) {
+        organizeBtn.disabled = isLoading;
+        btnSpinner.classList.toggle('hidden', !isLoading);
+        btnText.textContent = isLoading ? 'Organizing...' : 'Organize My Chaos';
+      }
+
+      function showError(message) {
+        errorMsg.textContent = message;
+        errorMsg.classList.remove('hidden');
+      }
+
+      function clearError() {
+        errorMsg.classList.add('hidden');
+        errorMsg.textContent = '';
+      }
+
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      function taskId(task) {
+        return `${task.step_number}-${task.title}`;
+      }
+
+      function planKey(tasks) {
+        return `chaos-triage:${tasks.map((task) => taskId(task)).join('|')}`;
+      }
+
+      function storageKey(suffix) {
+        return `${planKey(currentPlan.tasks)}:${suffix}`;
+      }
+
+      function setTaskMap(tasks) {
+        taskMap = new Map(tasks.map((task) => [taskId(task), task]));
+      }
+
+      function deriveStatusFromColumns() {
+        const next = {};
+        Object.entries(boardState).forEach(([column, ids]) => {
+          ids.forEach((id) => {
+            next[id] = column;
+          });
+        });
+        taskStatus = next;
+      }
+
+      function defaultBoard(tasks) {
+        return {
+          backlog: tasks.slice().sort((a, b) => a.step_number - b.step_number).map((task) => taskId(task)),
+          in_progress: [],
+          done: []
+        };
+      }
+
+      function dedupe(ids) {
+        const seen = new Set();
+        return ids.filter((id) => {
+          if (seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        });
+      }
+
+      function loadPersistedState(tasks) {
+        const baseBoard = defaultBoard(tasks);
+        const ids = baseBoard.backlog;
+        const storedColumns = JSON.parse(localStorage.getItem(storageKey('columns')) || '{}');
+        const storedStatus = JSON.parse(localStorage.getItem(storageKey('status')) || '{}');
+        const storedExpanded = JSON.parse(localStorage.getItem(storageKey('expanded')) || '{}');
+        const storedFilter = localStorage.getItem(storageKey('filter')) || 'all';
+        const nextBoard = { backlog: [], in_progress: [], done: [] };
+        const seen = new Set();
+
+        ['backlog', 'in_progress', 'done'].forEach((column) => {
+          const values = Array.isArray(storedColumns[column]) ? storedColumns[column] : [];
+          values.forEach((id) => {
+            if (ids.includes(id) && !seen.has(id)) {
+              nextBoard[column].push(id);
+              seen.add(id);
+            }
+          });
+        });
+
+        ids.forEach((id) => {
+          if (seen.has(id)) return;
+          const target = ['backlog', 'in_progress', 'done'].includes(storedStatus[id]) ? storedStatus[id] : 'backlog';
+          nextBoard[target].push(id);
+        });
+
+        boardState = nextBoard;
+        deriveStatusFromColumns();
+
+        expandedState = {};
+        ids.forEach((id) => {
+          expandedState[id] = Boolean(storedExpanded[id]);
+        });
+
+        currentFilter = storedFilter;
+        const boardChanged = JSON.stringify(baseBoard) !== JSON.stringify(nextBoard);
+        const anyExpanded = Object.values(expandedState).some(Boolean);
+        hasInteracted = boardChanged || anyExpanded || currentFilter !== 'all';
+      }
+
+      function persistState() {
+        localStorage.setItem(storageKey('columns'), JSON.stringify(boardState));
+        localStorage.setItem(storageKey('status'), JSON.stringify(taskStatus));
+        localStorage.setItem(storageKey('expanded'), JSON.stringify(expandedState));
+        localStorage.setItem(storageKey('filter'), currentFilter);
+      }
+
+      function taskMatchesFilterId(id) {
+        if (currentFilter === 'all') return true;
+        const task = taskMap.get(id);
+        return Boolean(task && task.category === currentFilter);
+      }
+
+      function getColumnTasks(column) {
+        return boardState[column].map((id) => taskMap.get(id)).filter(Boolean);
+      }
+
+      function getFilteredColumnTasks(column) {
+        return getColumnTasks(column).filter((task) => taskMatchesFilterId(taskId(task)));
+      }
+
+      function renderSummaryStrip() {
+        const backlog = getFilteredColumnTasks('backlog');
+        const doing = getFilteredColumnTasks('in_progress');
+        const done = getFilteredColumnTasks('done');
+        summaryNow.textContent = backlog[0] ? backlog[0].title : 'No backlog visible';
+        summaryNext.textContent = backlog[1] ? backlog[1].title : 'Luego sigue con el siguiente bloque libre.';
+        summaryLater.textContent = backlog[2] ? backlog[2].title : 'Then keep going through the backlog con calma.';
+        summaryDoing.textContent = `${doing.length} active`;
+        summaryDone.textContent = `${done.length} closed`;
+        summaryFilter.textContent = currentFilter === 'all' ? 'All topics' : (CATEGORY_META[currentFilter]?.label || currentFilter);
+      }
+
+      function buildLiveCoach() {
+        const backlog = getFilteredColumnTasks('backlog');
+        const doing = getFilteredColumnTasks('in_progress');
+        const done = getFilteredColumnTasks('done');
+        const first = backlog[0] || doing[0] || done[0] || currentPlan.tasks[0];
+        const second = backlog[1] || doing[1] || currentPlan.tasks[1] || null;
+        const third = backlog[2] || currentPlan.tasks[2] || null;
+        const visibleReward = [...backlog, ...doing].some((task) => task.category === 'consumption');
+
+        if (!first) {
+          return {
+            intro: 'No hay tareas visibles con este filtro.',
+            focus: 'Cambia el filtro a All topics para recuperar el plan completo.',
+            caution: 'No hace falta inventar trabajo nuevo; solo vuelve a una vista con tareas reales.',
+            steps: [
+              '1. Cambia el filtro.',
+              '2. Mira el backlog otra vez.',
+              '3. Elige una sola tarea para arrancar.'
+            ]
+          };
+        }
+
+        return {
+          intro: doing.length
+            ? `Vas bien. Ya moviste ${doing[0].title} a In Progress; ahora la clave es sostener el ritmo sin abrir veinte frentes.`
+            : 'Hoy no necesitas hacerlo todo de golpe. Solo necesitas una secuencia clara, humana y sostenible.',
+          focus: backlog.length
+            ? `Empieza por ${backlog[0].title} y piensa solo en este arranque: ${backlog[0].first_move}.`
+            : `Si no hay backlog visible, sigue con ${first.title} hasta cerrar un bloque concreto antes de saltar a otra cosa.`,
+          caution: visibleReward
+            ? 'Ojo: deja el contenido de reward para el final. Primero cierra lo que realmente te va a bajar la ansiedad.'
+            : 'Ojo con cambiar de contexto demasiado rapido. One block at a time te va a rendir mejor.',
+          steps: [
+            `1. Start con ${first.title}.`,
+            second
+              ? `2. Luego mueve ${second.title} sin sobrepensar la transicion.`
+              : '2. Luego revisa el backlog y elige el siguiente bloque mas liviano.',
+            third
+              ? `3. Despues entra a ${third.title} y termina ese bloque antes de abrir reward.`
+              : '3. Despues haz una pausa corta y sigue con el siguiente bloque util.'
+          ]
+        };
+      }
+
+      function renderCoach() {
+        const coach = (!hasInteracted && currentFilter === 'all' && initialCoach) ? initialCoach : buildLiveCoach();
+        coachMode.textContent = (!hasInteracted && currentFilter === 'all' && initialCoach) ? 'AI Coach' : 'Live Coach';
+        coachIntro.textContent = coach.intro || 'Hoy vamos a bajar el caos con una secuencia simple.';
+        coachFocus.textContent = coach.focus || 'Empieza por una sola accion visible.';
+        coachCaution.textContent = coach.caution || 'No abras nuevas tareas antes de cerrar un bloque.';
+        coachSteps.innerHTML = (Array.isArray(coach.steps) ? coach.steps : []).slice(0, 3).map((step) => {
+          return `<li class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">${escapeHtml(step)}</li>`;
+        }).join('');
+      }
+
+      function renderFilters() {
+        const topics = ['all', ...new Set(currentPlan.tasks.map((task) => task.category))];
+        if (!topics.includes(currentFilter)) currentFilter = 'all';
+        filterBar.innerHTML = topics.map((topic) => {
+          const active = topic === currentFilter;
+          const label = topic === 'all' ? 'All topics' : (CATEGORY_META[topic]?.label || topic);
+          const activeClass = active ? 'bg-cyan-300 text-slate-950' : 'bg-white/5 text-slate-300';
+          return `<button type="button" data-filter="${escapeHtml(topic)}" class="rounded-full px-3 py-1 text-xs transition ${activeClass}">${escapeHtml(label)}</button>`;
+        }).join('');
+
+        filterBar.querySelectorAll('[data-filter]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const nextFilter = button.dataset.filter || 'all';
+            if (nextFilter !== currentFilter) {
+              currentFilter = nextFilter;
+              hasInteracted = true;
+              persistState();
+              renderPlan();
+            }
+          });
+        });
+      }
+
+      function statusButtonClasses(active) {
+        return active ? 'bg-cyan-300 text-slate-950' : 'bg-white/5 text-slate-300';
+      }
+
+      function renderCard(task, column, index) {
+        const id = taskId(task);
+        const expanded = Boolean(expandedState[id]);
+        const meta = CATEGORY_META[task.category] || CATEGORY_META.personal_space;
+        const urgencyClass = URGENCY_STYLE[task.urgency] || URGENCY_STYLE.medium;
+        const positionLabel = column === 'backlog' ? `Backlog #${index + 1}` : (column === 'in_progress' ? 'Doing' : 'Done');
+        return `
+          <article data-task-id="${escapeHtml(id)}" class="rounded-2xl border ${meta.border} bg-gradient-to-br from-slate-900/90 via-slate-900/75 to-slate-800/65 p-4 shadow-lg">
+            <div class="flex items-start gap-3">
+              <button type="button" class="drag-handle mt-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-300 transition hover:bg-white/10" aria-label="Drag task">::</button>
+              <div class="min-w-0 flex-1">
+                <button type="button" data-action="toggle-expand" data-task-id="${escapeHtml(id)}" class="w-full text-left">
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                      <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">${escapeHtml(positionLabel)}</p>
+                      <h4 class="mt-1 truncate text-base font-semibold text-white">${escapeHtml(task.title)}</h4>
+                    </div>
+                    <span class="rounded-full border px-2.5 py-1 text-xs ${urgencyClass}">${escapeHtml(task.urgency)}</span>
+                  </div>
+                  <p class="mt-2 text-sm text-slate-300">${escapeHtml(task.first_move)}</p>
+                </button>
+                <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
+                  <span class="rounded-full px-3 py-1 ${meta.pill}">${escapeHtml(meta.label)}</span>
+                  <span class="rounded-full bg-black/20 px-3 py-1">${task.estimated_minutes} min</span>
+                  <span class="rounded-full bg-black/20 px-3 py-1">${escapeHtml(task.energy_level)} energy</span>
+                </div>
+                ${expanded ? `
+                  <div class="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <div class="rounded-2xl bg-white/5 p-3">
+                      <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Details</p>
+                      <p class="mt-1 text-sm leading-6 text-slate-200">${escapeHtml(task.details)}</p>
+                    </div>
+                    <div class="mt-3 rounded-2xl bg-cyan-400/10 p-3">
+                      <p class="text-[11px] uppercase tracking-[0.18em] text-cyan-100">First Move</p>
+                      <p class="mt-1 text-sm text-slate-100">${escapeHtml(task.first_move)}</p>
+                    </div>
+                    <div class="mt-3 rounded-2xl bg-white/5 p-3">
+                      <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Reason</p>
+                      <p class="mt-1 text-sm text-slate-200">${escapeHtml(task.reason)}</p>
+                    </div>
+                    <div class="mt-4 flex flex-wrap gap-2 text-xs">
+                      <button type="button" data-action="move-backlog" data-task-id="${escapeHtml(id)}" class="rounded-full px-3 py-1 transition ${statusButtonClasses(column === 'backlog')}">Back to Backlog</button>
+                      <button type="button" data-action="move-progress" data-task-id="${escapeHtml(id)}" class="rounded-full px-3 py-1 transition ${statusButtonClasses(column === 'in_progress')}">Start</button>
+                      <button type="button" data-action="move-done" data-task-id="${escapeHtml(id)}" class="rounded-full px-3 py-1 transition ${statusButtonClasses(column === 'done')}">Done</button>
+                    </div>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          </article>
+        `;
+      }
+
+      function renderEmptyState(column) {
+        return `<div class="rounded-2xl border border-dashed border-white/10 p-4 text-sm text-slate-500">${COLUMN_META[column].empty}</div>`;
+      }
+
+      function renderColumn(column, element) {
+        const tasks = getFilteredColumnTasks(column);
+        element.innerHTML = tasks.length ? tasks.map((task, index) => renderCard(task, column, index)).join('') : renderEmptyState(column);
+      }
+
+      function destroySortables() {
+        sortables.forEach((sortable) => sortable.destroy());
+        sortables = [];
+      }
+
+      function domTaskIds(element) {
+        return Array.from(element.children)
+          .map((child) => child.dataset.taskId)
+          .filter(Boolean);
+      }
+
+      function mergeVisibleOrder(fullIds, visibleIds) {
+        const visibleSet = new Set(fullIds.filter((id) => taskMatchesFilterId(id)));
+        if (!visibleSet.size) {
+          return dedupe([...visibleIds, ...fullIds]);
+        }
+
+        const queue = [...visibleIds];
+        const next = [];
+        fullIds.forEach((id) => {
+          if (visibleSet.has(id)) {
+            if (queue.length) next.push(queue.shift());
+          } else {
+            next.push(id);
+          }
+        });
+
+        if (queue.length) {
+          const firstHiddenIndex = next.findIndex((id) => !taskMatchesFilterId(id));
+          if (firstHiddenIndex === -1) next.push(...queue);
+          else next.splice(firstHiddenIndex, 0, ...queue);
+        }
+
+        return dedupe(next);
+      }
+
+      function moveTaskToColumn(id, targetColumn) {
+        Object.keys(boardState).forEach((column) => {
+          boardState[column] = boardState[column].filter((taskKey) => taskKey !== id);
+        });
+
+        if (targetColumn === 'backlog') boardState.backlog.push(id);
+        if (targetColumn === 'in_progress') boardState.in_progress.unshift(id);
+        if (targetColumn === 'done') boardState.done.unshift(id);
+
+        deriveStatusFromColumns();
+        hasInteracted = true;
+        persistState();
+        renderPlan();
+      }
+
+      function handleSortEnd(evt) {
+        const source = evt.from.dataset.column;
+        const target = evt.to.dataset.column;
+        const movedId = evt.item.dataset.taskId;
+        if (!source || !target || !movedId) return;
+
+        if (source === target) {
+          boardState[source] = mergeVisibleOrder(boardState[source], domTaskIds(evt.to));
+        } else {
+          const nextSource = boardState[source].filter((id) => id !== movedId);
+          const nextTarget = boardState[target].filter((id) => id !== movedId);
+          boardState[source] = mergeVisibleOrder(nextSource, domTaskIds(evt.from));
+          boardState[target] = mergeVisibleOrder(nextTarget, domTaskIds(evt.to));
+        }
+
+        deriveStatusFromColumns();
+        hasInteracted = true;
+        persistState();
+        renderPlan();
+      }
+
+      function initSortables() {
+        destroySortables();
+        [backlogList, progressList, doneList].forEach((element) => {
+          sortables.push(
+            Sortable.create(element, {
+              group: 'chaos-board',
+              animation: 170,
+              handle: '.drag-handle',
+              draggable: '[data-task-id]',
+              fallbackOnBody: true,
+              ghostClass: 'opacity-40',
+              chosenClass: 'ring-2 ring-cyan-300/50',
+              onEnd: handleSortEnd
+            })
+          );
+        });
+      }
+
+      function attachCardActions() {
+        document.querySelectorAll('[data-action]').forEach((button) => {
+          button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const action = button.dataset.action;
+            const id = button.dataset.taskId;
+            if (!action || !id) return;
+
+            if (action === 'toggle-expand') {
+              expandedState[id] = !expandedState[id];
+              persistState();
+              renderPlan();
+              return;
+            }
+            if (action === 'move-backlog') {
+              moveTaskToColumn(id, 'backlog');
+              return;
+            }
+            if (action === 'move-progress') {
+              moveTaskToColumn(id, 'in_progress');
+              return;
+            }
+            if (action === 'move-done') {
+              moveTaskToColumn(id, 'done');
+            }
+          });
+        });
+      }
+
+      function renderBoard() {
+        renderColumn('backlog', backlogList);
+        renderColumn('in_progress', progressList);
+        renderColumn('done', doneList);
+        boardHint.textContent = currentFilter === 'all'
+          ? 'Tip: drag in Backlog to define the real execution order.'
+          : `Filter active: ${CATEGORY_META[currentFilter]?.label || currentFilter}. Dragging still updates the filtered view.`;
+        attachCardActions();
+        initSortables();
+      }
+
+      function renderPlan() {
+        if (!currentPlan) return;
+        renderSummaryStrip();
+        renderCoach();
+        renderFilters();
+        renderBoard();
+      }
+
+      function applyPlan(data) {
+        currentPlan = data;
+        initialCoach = data.coach || null;
+        setTaskMap(data.tasks);
+        loadPersistedState(data.tasks);
+        summaryText.textContent = data.summary || 'Plan generated.';
+        modelTag.textContent = data.meta?.transport ? `Model: ${data.meta.model} via ${data.meta.transport}` : `Model: ${data.meta?.model || 'local'}`;
+        renderPlan();
+        resultsSection.classList.remove('hidden');
+      }
+
+      async function runTriage() {
+        const text = brainDump.value.trim();
+        if (!text) {
+          showError('Please add your brain dump first.');
+          return;
+        }
+
+        clearError();
+        setLoading(true);
+
+        try {
+          const response = await fetch('/api/triage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text })
+          });
+
+          const data = await response.json();
+          if (!response.ok) {
+            const detail = typeof data.detail === 'string' ? data.detail : data.detail?.message || 'Failed to organize your chaos.';
+            throw new Error(detail);
+          }
+
+          const tasks = Array.isArray(data.tasks) ? [...data.tasks].sort((a, b) => a.step_number - b.step_number) : [];
+          applyPlan({ ...data, tasks });
+          resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (err) {
+          const message = err && err.message === 'Failed to fetch'
+            ? 'Backend not reachable. Run scripts/start-chaos-triage.cmd and refresh this page.'
+            : (err.message || 'Something went wrong while organizing your tasks.');
+          showError(message);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      organizeBtn.addEventListener('click', runTriage);
+      brainDump.addEventListener('keydown', (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+          runTriage();
+        }
+      });
+    </script>
+  </body>
+</html>
