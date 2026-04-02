@@ -1,0 +1,1481 @@
+# Chaos-Triage Documentation
+
+## 1. What Chaos-Triage Is
+
+Chaos-Triage is a 100% local planning tool that turns an unstructured brain dump into:
+
+- a structured JSON task plan
+- a human-friendly coaching summary
+- a draggable Kanban board
+- a persistent day-planning workspace in the browser
+
+The app is designed to run locally on Windows, use a local Ollama model, and keep all inference on the machine. The current default model is `qwen3:8b`.
+
+The system is intentionally split into two layers:
+
+- Backend: FastAPI + Ollama integration + task extraction + JSON normalization
+- Frontend: a single Tailwind-powered HTML dashboard with local state persistence and drag/drop interactions
+
+
+## 2. High-Level Architecture
+
+The project is centered on these files:
+
+- `main.py`
+- `templates/index.html`
+- `requirements.txt`
+- `scripts/start-chaos-triage.cmd`
+- `scripts/start-chaos-triage.ps1`
+
+Runtime flow:
+
+1. The Windows launcher ensures Python dependencies are installed.
+2. The launcher ensures Ollama is running on `http://127.0.0.1:11434`.
+3. The launcher warms up the selected model.
+4. The launcher starts FastAPI with Uvicorn on `http://127.0.0.1:8000`.
+5. The browser loads `index.html` from `GET /`.
+6. The user pastes a brain dump into the textarea.
+7. The frontend sends the raw text to `POST /api/triage`.
+8. The backend pre-splits the text into task seeds.
+9. The backend sends the original text plus task seeds to Ollama with a strict JSON system prompt.
+10. The backend parses, repairs if needed, normalizes, validates, and returns a structured response.
+11. The frontend renders:
+    - the summary strip
+    - the AI coach panel
+    - topic filters
+    - the Kanban board
+12. The browser persists board order, task status, expanded cards, and filter selection in `localStorage`.
+
+
+## 3. Project Goals and Design Choices
+
+This project is optimized around a few explicit product choices:
+
+- Windows-first startup experience
+- fully local inference
+- no database
+- no frontend build step
+- one-file frontend for easy iteration
+- resilient LLM parsing even when the model drifts
+- manual control after generation
+
+That last point matters a lot. The AI suggests a sequence, but the user owns execution. Newly generated tasks always begin in `Backlog`. Nothing starts as `In Progress` or `Done`.
+
+
+## 4. Dependencies
+
+`requirements.txt` contains:
+
+- `fastapi`
+- `uvicorn`
+- `ollama`
+
+What each one does:
+
+- `fastapi`: serves the frontend and exposes the triage API
+- `uvicorn`: ASGI server used to run FastAPI
+- `ollama`: Python client for talking to the local Ollama instance
+
+Frontend dependencies are CDN-based and not installed via Python:
+
+- Tailwind CSS CDN
+- SortableJS CDN
+- Google Fonts for `Sora`
+
+
+## 5. Backend Overview
+
+The backend lives in `main.py`.
+
+It is responsible for:
+
+- serving the frontend
+- accepting raw input text
+- preprocessing the text into task seeds
+- building the prompt sent to Qwen
+- calling Ollama
+- recovering from malformed model output
+- validating and normalizing the response
+- returning a stable JSON payload to the browser
+
+FastAPI app initialization:
+
+- title: `Chaos-Triage`
+- version: `1.0.0`
+
+Environment variables:
+
+- `OLLAMA_HOST`
+  - default: `http://127.0.0.1:11434`
+  - set before importing `ollama` so the Python Ollama client uses the right host
+- `OLLAMA_MODEL`
+  - default: `qwen3:8b`
+
+
+## 6. API Endpoints
+
+### `GET /`
+
+Purpose:
+
+- serves the frontend HTML file from `templates/index.html`
+
+Implementation:
+
+- returns `FileResponse(BASE_DIR / "templates" / "index.html")`
+
+### `GET /api/health`
+
+Purpose:
+
+- lightweight health check for the launcher and for troubleshooting
+
+Response shape:
+
+```json
+{
+  "ok": true,
+  "model": "qwen3:8b",
+  "ollama_host": "http://127.0.0.1:11434"
+}
+```
+
+### `POST /api/triage`
+
+Purpose:
+
+- accepts raw text and returns the structured plan
+
+Accepted input:
+
+- JSON body with `{"text": "..."}` preferred
+- plain text body also supported
+
+Response shape:
+
+```json
+{
+  "summary": "short summary",
+  "coach": {
+    "intro": "...",
+    "focus": "...",
+    "caution": "...",
+    "steps": ["...", "...", "..."]
+  },
+  "tasks": [
+    {
+      "step_number": 1,
+      "title": "...",
+      "details": "...",
+      "first_move": "...",
+      "category": "personal_space",
+      "urgency": "medium",
+      "energy_level": "light",
+      "estimated_minutes": 15,
+      "reason": "...",
+      "lane": "suggested"
+    }
+  ],
+  "meta": {
+    "model": "qwen3:8b",
+    "generated_at": "2026-04-01T00:00:00+00:00",
+    "transport": "python_ollama",
+    "task_seeds": ["clean room", "study calculus"]
+  }
+}
+```
+
+
+## 7. Input Parsing and Request Handling
+
+### `_extract_input_text(content_type, raw_body)`
+
+Purpose:
+
+- normalizes incoming request bodies into a plain string
+
+Behavior:
+
+- decodes bytes as UTF-8 with replacement
+- if the request is JSON:
+  - parses the body
+  - reads `payload["text"]` if present
+  - supports a raw JSON string body too
+- if the request is not JSON:
+  - returns the decoded plain body
+
+Failure mode:
+
+- invalid JSON body raises `HTTPException(status_code=400, detail="Invalid JSON body")`
+
+
+## 8. Comma-First Task Extraction
+
+This is one of the most important pieces of the app.
+
+The extraction layer exists because raw LLM parsing alone is too inconsistent when the user expects very predictable task boundaries.
+
+The guiding rule is:
+
+- every comma is treated as the primary task boundary
+
+The implementation is intentionally conservative after that:
+
+- obvious multi-action phrases can be split further
+- descriptive single tasks should stay intact
+
+### `_split_primary_seeds(text)`
+
+Purpose:
+
+- performs the first-pass split by comma
+
+Behavior:
+
+- splits on `,`
+- trims whitespace and trailing punctuation
+- drops empty chunks
+
+Example:
+
+```text
+"clean room, study calculus, watch a video"
+```
+
+becomes:
+
+```json
+["clean room", "study calculus", "watch a video"]
+```
+
+### `_should_split_connector(left, right)`
+
+Purpose:
+
+- decides whether a phrase split around a connector should become two tasks
+
+Current heuristics:
+
+- both sides must be non-empty
+- each side must stay relatively short
+- at least one side must look like an action phrase
+
+Action markers include words like:
+
+- `clean`
+- `study`
+- `deploy`
+- `test`
+- `submit`
+- `watch`
+- `read`
+- `estudiar`
+- `entregar`
+- `limpiar`
+- `revisar`
+
+This function is what keeps the extractor from splitting every sentence with `and` or `y`.
+
+### `_split_obvious_compound_seed(seed)`
+
+Purpose:
+
+- splits a single comma chunk only when it clearly contains multiple actions
+
+Connectors currently checked:
+
+- `then`
+- `y luego`
+- `y despues`
+- `and then`
+- `y`
+- `and`
+
+Examples that can split:
+
+- `deploy then test`
+- `clean room and wash dishes`
+- `estudiar y entregar la tarea`
+
+Examples that may still be split because they look like clear action pairs:
+
+- `read the product spec and annotate key blockers`
+
+That last example is a tradeoff. The current implementation prefers detail and explicit separation when the phrase looks action-oriented. If later desired, this can be tightened.
+
+### `_extract_task_seeds(text)`
+
+Purpose:
+
+- builds the final ordered task seed list
+
+Behavior:
+
+1. split by commas
+2. try conservative secondary splitting on obvious compounds
+3. flatten into one ordered list
+4. if nothing survives, return the original text as one seed
+
+Example:
+
+```text
+deploy then test, clean room and wash dishes, estudiar y entregar la tarea
+```
+
+becomes:
+
+```json
+[
+  "deploy",
+  "test",
+  "clean room",
+  "wash dishes",
+  "estudiar",
+  "entregar la tarea"
+]
+```
+
+
+## 9. Prompt Construction and LLM Contract
+
+### Why a strict prompt is required
+
+Local LLMs often drift into:
+
+- prose outside the JSON
+- Markdown fences
+- missing fields
+- category invention
+- inconsistent sequencing
+
+The backend uses a strict system prompt plus a JSON schema-like format constraint to reduce this drift.
+
+### `SYSTEM_PROMPT`
+
+The system prompt defines:
+
+- the exact required JSON shape
+- category constraints
+- sequencing rules
+- the deploy-before-test rule
+- the coach tone
+- the medium-detail task style
+- the comma-first seed preservation rule
+
+Important prompt rules:
+
+- return JSON only
+- preserve task seed order unless an obvious split is needed
+- keep titles concise
+- always include `first_move`
+- `coach.steps` must contain exactly 3 lines
+- `kinetiq_business` only when explicitly justified by the user text
+
+### `TRIAGE_SCHEMA`
+
+This is passed to `ollama.chat(..., format=TRIAGE_SCHEMA)`.
+
+It defines the response envelope:
+
+- `summary`
+- `coach`
+- `tasks`
+
+Each task is expected to include:
+
+- `step_number`
+- `title`
+- `details`
+- `first_move`
+- `category`
+- `urgency`
+- `energy_level`
+- `estimated_minutes`
+- `reason`
+
+### `_build_user_prompt(original_text, task_seeds)`
+
+Purpose:
+
+- sends structured context to the model without hiding the original brain dump
+
+It includes:
+
+- the full original brain dump
+- an ordered numbered list of pre-split task seeds
+- an instruction to preserve that order unless one seed clearly contains multiple actions
+
+This gives the model two views of the input:
+
+- the authentic freeform context
+- the deterministic extraction scaffolding
+
+
+## 10. Ollama Integration
+
+Chaos-Triage uses two possible transport paths.
+
+### Primary path: Python Ollama client
+
+Function:
+
+- `_generate_with_ollama(user_prompt)`
+
+Primary call:
+
+```python
+ollama.chat(
+    model=MODEL_NAME,
+    messages=[
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt},
+    ],
+    options={"temperature": 0.2},
+    format=TRIAGE_SCHEMA,
+)
+```
+
+Why this is preferred:
+
+- it is the cleanest direct integration
+- it respects `OLLAMA_HOST`
+- it works naturally when Python can reach the Ollama instance
+
+### Fallback path: Windows PowerShell bridge
+
+Function:
+
+- `_chat_via_windows_ollama(system_prompt, user_text, fmt=None)`
+
+Why it exists:
+
+- in mixed Windows + WSL environments, Python running under Linux may not directly reach the Windows Ollama host
+- the bridge calls Windows PowerShell directly and posts to `http://127.0.0.1:11434/api/chat`
+
+How it works:
+
+1. Build a JSON payload for Ollama.
+2. Base64-encode the payload.
+3. Pass it into a PowerShell script.
+4. Decode it inside PowerShell.
+5. Call `Invoke-RestMethod` against the Ollama chat API.
+6. Return the model content back to Python.
+
+Important implementation detail:
+
+- the PowerShell bridge explicitly sets UTF-8 output encoding so returned text is less likely to break due to encoding mismatches
+
+### Transport metadata
+
+The backend includes the transport used in `meta.transport`.
+
+Examples:
+
+- `python_ollama`
+- `windows_ollama_bridge`
+- `python_ollama+repair`
+- `windows_ollama_bridge+repair`
+
+
+## 11. Parsing, Repair, and JSON Safety
+
+LLM output is never trusted directly.
+
+### `_extract_content(chat_response)`
+
+Purpose:
+
+- normalizes content extraction from either dict-like or object-like Ollama responses
+
+### `_extract_first_json_object(raw)`
+
+Purpose:
+
+- safely recovers the first valid JSON object from model output
+
+Why it exists:
+
+- some model outputs may include:
+  - code fences
+  - stray commentary
+  - extra text before or after the JSON
+
+How it works:
+
+1. Trim whitespace.
+2. Remove Markdown fences if present.
+3. Try `json.loads` on the whole string.
+4. If that fails, scan the text for `{`.
+5. Track object depth while respecting quoted strings and escapes.
+6. Attempt to parse candidate substrings until a valid JSON object is found.
+
+Failure:
+
+- raises `ValueError("No valid JSON object found in model response")`
+
+### `REPAIR_PROMPT`
+
+If extraction or validation fails, the backend does one repair pass.
+
+Repair strategy:
+
+- send the malformed raw content back to the model
+- instruct the model to return valid JSON only
+- preserve task information if possible
+
+### `_repair_content(raw_content)`
+
+Uses the Windows bridge repair path to ask the model to reformat bad output into valid JSON.
+
+### Why this matters
+
+Without the repair pass, the UX would degrade badly whenever the local model returns:
+
+- non-JSON wrappers
+- missing braces
+- partial schema drift
+
+Instead of immediately failing, the app gets a second chance to salvage usable structure.
+
+
+## 12. Normalization and Validation
+
+### `_coerce_and_validate(data, original_text)`
+
+This is the core post-processing function.
+
+Responsibilities:
+
+- accept slightly messy but usable task objects
+- coerce types into stable values
+- clamp bad estimates
+- sanitize field lengths
+- normalize categories
+- generate `lane`
+- produce final response metadata
+
+Task field normalization:
+
+- `title`
+  - falls back through `title`, `task`, `name`
+  - clipped to 140 chars
+- `details`
+  - falls back through `details`, `description`
+  - clipped to 400 chars
+- `first_move`
+  - falls back through `first_move`, `next_action`, `title`
+  - clipped to 160 chars
+- `reason`
+  - defaults to `"Placed to maintain momentum."`
+  - clipped to 300 chars
+
+Enum normalization:
+
+- invalid urgency becomes `medium`
+- invalid energy becomes:
+  - `light` for `personal_space`
+  - otherwise `medium`
+
+Estimated minutes:
+
+- coerced to integer
+- clamped between 5 and 180
+
+Task ordering:
+
+- tasks are sorted by `(step_number, category, title)`
+- then re-numbered sequentially from 1
+
+Lane assignment:
+
+- computed after sorting
+- not a real workflow state
+- only a recommendation
+
+
+## 13. Category Safeguards
+
+The app uses four categories:
+
+- `kinetiq_business`
+- `university`
+- `personal_space`
+- `consumption`
+
+### `_remap_category_if_needed(category, task_text, original_text)`
+
+Purpose:
+
+- prevent false positive business classification
+
+Important rule:
+
+- if the model returns `kinetiq_business` but the original user text does not contain explicit business/work markers, the category is remapped
+
+Remap logic:
+
+- if university-like terms are found -> `university`
+- if physical chore terms are found -> `personal_space`
+- if content-consumption terms are found -> `consumption`
+- otherwise -> `personal_space`
+
+This is important because local models often over-assign professional categories when the wording sounds goal-oriented.
+
+
+## 14. Coach Generation
+
+The API returns a `coach` object with:
+
+- `intro`
+- `focus`
+- `caution`
+- `steps`
+
+### `_build_default_coach(tasks)`
+
+Purpose:
+
+- create a fully local fallback coach if the model returns no usable coach object
+
+Behavior:
+
+- prefers meaningful non-consumption tasks
+- picks the first three useful tasks
+- generates a mixed Spanish/English coaching voice
+- adds a caution about distraction or reward timing
+
+### `_normalize_coach(raw_coach, tasks)`
+
+Purpose:
+
+- clean and validate the model-provided coach
+
+Behavior:
+
+- if invalid, use fallback
+- trim field lengths
+- ensure exactly three steps by filling missing steps from fallback
+
+
+## 15. Recommendation Semantics vs Real Status
+
+The backend returns `lane`, but `lane` is not the same as actual task status.
+
+### `_lane_for_task(task, index, total)`
+
+Purpose:
+
+- provide a recommendation hint based on order and task type
+
+Current logic:
+
+- first task -> `suggested`
+- consumption -> `done_later`
+- early or high urgency tasks -> `suggested`
+- last task -> `done_later`
+- default -> `suggested`
+
+Important distinction:
+
+- `lane` is advisory only
+- all new tasks still start in the frontend `Backlog`
+- only the user moves tasks into `In Progress` or `Done`
+
+
+## 16. Frontend Overview
+
+The entire frontend is in `templates/index.html`.
+
+There is no bundler, framework, or transpilation step.
+
+The page includes:
+
+- Tailwind CSS via CDN
+- SortableJS via CDN
+- one inline `<script>` block for all application logic
+
+Major UI sections:
+
+1. input card
+2. summary strip
+3. human coach panel
+4. topic filters
+5. Kanban board
+
+
+## 17. Visual Design
+
+The interface uses:
+
+- dark glassmorphism-inspired panels
+- soft background glow layers
+- `Sora` font
+- Tailwind utility classes
+- subtle animations via custom Tailwind keyframes
+
+The dashboard is meant to feel:
+
+- modern
+- calm
+- private
+- local
+- more like a focus tool than a generic form
+
+
+## 18. Frontend State Model
+
+The frontend keeps all state in memory plus `localStorage`.
+
+Main state variables:
+
+- `currentPlan`
+  - full API response currently rendered
+- `initialCoach`
+  - the coach returned by the model
+- `taskMap`
+  - map from task id to task object
+- `boardState`
+  - column-to-task-id arrays
+- `taskStatus`
+  - task-id-to-column map
+- `expandedState`
+  - whether each card is expanded
+- `currentFilter`
+  - active topic filter
+- `hasInteracted`
+  - whether the user has changed the board/filter state after generation
+- `sortables`
+  - SortableJS instances
+
+### Task identity
+
+Function:
+
+- `taskId(task)`
+
+Current implementation:
+
+```js
+`${task.step_number}-${task.title}`
+```
+
+This means task identity depends on:
+
+- final normalized step number
+- title text
+
+That is sufficient for the current local persistence strategy as long as tasks remain reasonably distinct.
+
+
+## 19. Plan Persistence
+
+Persistence is per generated plan.
+
+### `planKey(tasks)`
+
+Builds a unique storage namespace based on all task IDs.
+
+### `storageKey(suffix)`
+
+Creates a plan-specific `localStorage` key.
+
+Persisted items:
+
+- `columns`
+- `status`
+- `expanded`
+- `filter`
+
+### `loadPersistedState(tasks)`
+
+What it does:
+
+1. creates the default board
+2. loads stored columns/status/expanded/filter
+3. restores known task IDs only
+4. avoids duplicates
+5. fills missing tasks into appropriate columns
+6. computes whether the user has already interacted
+
+### `persistState()`
+
+Writes the current board/filter/expansion state back to `localStorage`.
+
+
+## 20. Summary Strip Logic
+
+### `renderSummaryStrip()`
+
+The strip shows:
+
+- `Now`
+- `Next`
+- `Later`
+- `Doing`
+- `Done`
+- `Filter`
+
+It is derived from the current visible board state, not just the original plan.
+
+Important behaviors:
+
+- `Now`, `Next`, and `Later` come from the filtered `Backlog`
+- `Doing` and `Done` are counts
+- `Filter` reflects the current active topic filter
+
+This makes the summary strip a live execution view, not a static AI output.
+
+
+## 21. AI Coach vs Live Coach
+
+The app has two coach modes.
+
+### Initial AI Coach
+
+Used when:
+
+- the plan is freshly generated
+- the filter is `all`
+- the user has not interacted yet
+
+Source:
+
+- `data.coach` from the backend
+
+### Live Coach
+
+Used when:
+
+- the user moves cards
+- the user changes filters
+- expanded/persisted state indicates interaction
+
+Source:
+
+- browser-side recomputation
+
+### `buildLiveCoach()`
+
+Purpose:
+
+- create coaching text that reflects the actual current board
+
+Behavior:
+
+- prefers visible backlog tasks
+- falls back to in-progress or done tasks if needed
+- changes the tone depending on whether something is already in progress
+- warns against pulling reward tasks too early
+- returns:
+  - `intro`
+  - `focus`
+  - `caution`
+  - `steps`
+
+### `renderCoach()`
+
+Purpose:
+
+- choose between AI coach and live coach
+- update the panel accordingly
+
+UI labels:
+
+- `AI Coach`
+- `Live Coach`
+
+
+## 22. Topic Filters
+
+### `renderFilters()`
+
+Filters are generated dynamically from categories present in the current task list.
+
+Behavior:
+
+- always includes `All topics`
+- includes only categories present in the plan
+- highlights the active filter
+- updates the plan view immediately on click
+
+Filtering affects:
+
+- summary strip
+- coach
+- visible cards in each column
+
+Filtering does not destroy:
+
+- hidden task positions
+- hidden statuses
+- hidden expansion state
+
+
+## 23. Task Card Rendering
+
+### `renderCard(task, column, index)`
+
+Each task is rendered as a compact card with optional expanded details.
+
+Collapsed view includes:
+
+- backlog position or column label
+- title
+- urgency pill
+- first move preview
+- category pill
+- estimated minutes
+- energy level
+- drag handle
+
+Expanded view includes:
+
+- `Details`
+- `First Move`
+- `Reason`
+- fallback action buttons
+
+Fallback action buttons:
+
+- `Back to Backlog`
+- `Start`
+- `Done`
+
+This keeps the board navigable even if drag/drop is unavailable or inconvenient.
+
+
+## 24. Board Rendering and Reordering
+
+The board has three columns:
+
+- `Backlog`
+- `In Progress`
+- `Done`
+
+### Default state
+
+All new tasks are placed in:
+
+- `Backlog`
+
+No new task starts in:
+
+- `In Progress`
+- `Done`
+
+### `defaultBoard(tasks)`
+
+Builds the starting board from the normalized order.
+
+### `renderBoard()`
+
+Responsibilities:
+
+- render each column
+- update the board hint
+- attach button handlers
+- initialize SortableJS
+
+### `initSortables()`
+
+Creates one Sortable instance per column.
+
+Configuration highlights:
+
+- shared group: `chaos-board`
+- handle: `.drag-handle`
+- animation: `170`
+- drag target: `[data-task-id]`
+
+### `handleSortEnd(evt)`
+
+Updates internal board state after drag/drop.
+
+Behavior:
+
+- supports intra-column reorder
+- supports cross-column moves
+- persists changes
+- triggers full rerender
+
+
+## 25. Reordering with Active Filters
+
+This is a subtle but important behavior.
+
+When a filter is active, only some tasks are visible. If the user drags visible tasks, hidden tasks must not be lost or corrupted.
+
+### `mergeVisibleOrder(fullIds, visibleIds)`
+
+Purpose:
+
+- merge the new visible order back into the full stored column order while preserving hidden items
+
+This function ensures:
+
+- filtered drag/drop changes only the visible subset ordering
+- hidden tasks remain in the board state
+- the board remains coherent when the filter is removed
+
+
+## 26. Manual Status Changes
+
+### `moveTaskToColumn(id, targetColumn)`
+
+Purpose:
+
+- move a task through fallback buttons instead of drag/drop
+
+Behavior:
+
+- removes the task from all columns
+- inserts it into the target column
+- updates derived status
+- marks the board as user-modified
+- persists state
+- rerenders the plan
+
+Insertion behavior:
+
+- moving to `backlog` pushes to the end
+- moving to `in_progress` inserts at the top
+- moving to `done` inserts at the top
+
+
+## 27. Empty States
+
+Each column has an explicit empty message:
+
+- filtered backlog empty
+- in-progress empty
+- done empty
+
+These are defined in `COLUMN_META`.
+
+They help keep the board understandable when filters hide all tasks or when the user has not started anything yet.
+
+
+## 28. Frontend Request Flow
+
+### `runTriage()`
+
+This is the main user action flow.
+
+Behavior:
+
+1. read textarea value
+2. reject empty input
+3. clear any previous error
+4. show loading state
+5. `fetch('/api/triage', ...)`
+6. parse JSON response
+7. sort tasks by `step_number`
+8. apply the plan
+9. scroll the result section into view
+10. show friendly error if anything fails
+
+Failure message handling:
+
+- if fetch itself fails:
+  - show `"Backend not reachable. Run scripts/start-chaos-triage.cmd and refresh this page."`
+- otherwise:
+  - show backend/API error detail if available
+
+Keyboard shortcut:
+
+- `Ctrl+Enter` or `Cmd+Enter` runs triage from the textarea
+
+
+## 29. Applying a New Plan
+
+### `applyPlan(data)`
+
+Responsibilities:
+
+- store the returned plan
+- store the initial AI coach
+- rebuild the task map
+- restore any persisted board state for this plan
+- update the summary text
+- update the model tag
+- render the whole plan
+- reveal the results section
+
+Model tag format:
+
+- `Model: qwen3:8b via python_ollama`
+- `Model: qwen3:8b via windows_ollama_bridge`
+
+
+## 30. Windows Launch System
+
+Chaos-Triage is designed to be launched from Windows.
+
+### `scripts/start-chaos-triage.cmd`
+
+Purpose:
+
+- simple double-click entry point
+
+Behavior:
+
+- runs the PowerShell launcher
+- supports `--no-browser`
+
+### `scripts/start-chaos-triage.ps1`
+
+This is the real bootstrap script.
+
+It is responsible for:
+
+- locating Windows Python
+- installing Python dependencies if needed
+- killing any previous Uvicorn instance on port 8000
+- starting Ollama if it is not already running
+- waiting until Ollama responds
+- warming the model
+- starting the FastAPI server
+- waiting until the backend becomes healthy
+- optionally opening the browser
+
+### Windows Python discovery
+
+The script looks for:
+
+- `%LOCALAPPDATA%\Programs\Python\Python314\python.exe`
+- `%LOCALAPPDATA%\Programs\Python\Python313\python.exe`
+- `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`
+
+### Dependency install strategy
+
+The script uses:
+
+- `requirements.txt`
+- an install stamp file: `.windows-python-requirements-installed`
+
+If `requirements.txt` is newer than the stamp, dependencies are reinstalled.
+
+### Previous server cleanup
+
+`Stop-PreviousServer` looks for `python.exe` processes matching:
+
+- `-m uvicorn main:app`
+- `--port 8000`
+
+This prevents stale server processes from serving outdated code.
+
+### Model warm-up
+
+The launcher sends a background `api/generate` request with:
+
+- selected model
+- `keep_alive = "30m"`
+
+This reduces cold-start friction when the user submits the first real triage request.
+
+
+## 31. Health and Readiness Strategy
+
+The PowerShell launcher waits on:
+
+- `http://127.0.0.1:11434/api/tags` for Ollama readiness
+- `http://127.0.0.1:8000/api/health` for app readiness
+
+The helper function `Wait-Http` retries up to 30 times with 2-second spacing.
+
+This prevents opening a dead browser tab before the app is actually ready.
+
+
+## 32. End-to-End Example
+
+Input:
+
+```text
+clean room, deploy then test, watch a video
+```
+
+### Extraction stage
+
+Task seeds become:
+
+```json
+["clean room", "deploy", "test", "watch a video"]
+```
+
+### Prompt stage
+
+The model receives:
+
+- the original full text
+- the ordered seed list
+
+### Expected model behavior
+
+- `clean room` likely becomes `personal_space`
+- `deploy` becomes `kinetiq_business`
+- `test` becomes `kinetiq_business`
+- `watch a video` becomes `consumption`
+- deploy must be before test
+
+### UI stage
+
+The board initially shows:
+
+- Backlog:
+  - clean room
+  - deploy
+  - test
+  - watch a video
+- In Progress:
+  - empty
+- Done:
+  - empty
+
+Summary strip likely shows:
+
+- Now: clean room
+- Next: deploy
+- Later: test
+
+
+## 33. Error Handling
+
+### Empty input
+
+Frontend:
+
+- blocks submission
+- shows: `Please add your brain dump first.`
+
+### Invalid JSON request body
+
+Backend:
+
+- returns HTTP 400
+
+### Ollama unavailable
+
+Backend:
+
+- returns HTTP 503 with a message telling the user to ensure Ollama is running and the model exists
+
+### Model returns unparsable content
+
+Backend:
+
+1. attempts direct parse
+2. attempts repair pass
+3. if still invalid, returns HTTP 422 with:
+   - human message
+   - raw preview
+   - error detail
+
+### Backend not reachable
+
+Frontend:
+
+- catches fetch failure
+- tells the user to run the Windows launcher
+
+
+## 34. Known Tradeoffs and Current Limitations
+
+### 1. Connector splitting is heuristic
+
+The app is intentionally conservative, but some action-heavy phrases may still be split when they are arguably one compound task.
+
+Example:
+
+- `read the product spec and annotate key blockers`
+
+Current logic may split this into two tasks because both halves look like actions.
+
+### 2. Task identity is title-based
+
+The current `taskId` uses:
+
+- `step_number`
+- `title`
+
+If two tasks normalize to the same title and similar order, collisions are possible, though uncommon in normal use.
+
+### 3. No database or multi-device sync
+
+State is browser-local only.
+
+### 4. No authentication
+
+This is a local personal tool, not a multi-user system.
+
+### 5. Single-file frontend
+
+This makes iteration fast, but long-term maintainability may eventually benefit from splitting styles, state logic, and rendering helpers.
+
+
+## 35. How to Run the App
+
+### Recommended Windows path
+
+Double-click:
+
+- `scripts/start-chaos-triage.cmd`
+
+Or run:
+
+```bat
+D:\Manager\scripts\start-chaos-triage.cmd
+```
+
+Then open:
+
+- `http://127.0.0.1:8000`
+
+### Manual Python run
+
+If using a Python environment manually:
+
+```bash
+python -m pip install -r requirements.txt
+uvicorn main:app --host 127.0.0.1 --port 8000
+```
+
+Make sure Ollama is already running and the selected model is available.
+
+
+## 36. Troubleshooting
+
+### Problem: `Failed to fetch`
+
+Meaning:
+
+- the browser cannot reach the backend
+
+Check:
+
+- did the Windows launcher run successfully?
+- is port `8000` in use?
+- does `http://127.0.0.1:8000/api/health` respond?
+
+### Problem: `Model output could not be parsed into valid task JSON`
+
+Meaning:
+
+- the model drifted too far for direct parse and repair to recover fully
+
+What to check:
+
+- model is actually `qwen3:8b`
+- Ollama is healthy
+- the prompt was not manually changed in a way that weakens JSON enforcement
+
+### Problem: wrong category goes to business
+
+Protection already exists:
+
+- false positive `kinetiq_business` should be remapped unless the original text explicitly contains business/work markers
+
+If still seen:
+
+- inspect the original text for words like `deploy`, `spec`, `test`, `product`, `code`, `work`
+
+### Problem: board looks stale after updates
+
+Try:
+
+- refresh the page
+- if needed, regenerate a plan
+
+Persistence is local and plan-specific, so older board state can legitimately be restored for the same normalized task set.
+
+
+## 37. How to Extend the Project
+
+Good next extensions:
+
+- stronger linguistic rules for connector splitting
+- explicit task UUID generation instead of `step_number-title`
+- export/import of plans
+- optional history of past plans
+- richer estimate logic
+- more nuanced reward and blocker detection
+- drag-and-drop touch polish
+- optional notes per task
+- per-task subtasks generated from the same seed
+
+
+## 38. Maintenance Checklist
+
+When changing the backend:
+
+- preserve the response contract expected by the frontend
+- keep strict JSON enforcement
+- keep repair pass behavior
+- keep business category safeguards
+- retest comma-first extraction behavior
+
+When changing the frontend:
+
+- preserve `Backlog`, `In Progress`, and `Done`
+- preserve `localStorage` plan scoping
+- keep fallback actions for non-drag users
+- confirm filters do not corrupt hidden ordering
+
+When changing the launcher:
+
+- confirm Python detection still works
+- confirm Ollama readiness check still passes
+- confirm stale Uvicorn processes are cleaned up
+
+
+## 39. File-by-File Responsibility Summary
+
+### `main.py`
+
+- FastAPI app
+- request parsing
+- task extraction
+- prompt construction
+- Ollama calls
+- JSON extraction
+- repair pass
+- normalization
+- API response
+
+### `templates/index.html`
+
+- full UI markup
+- visual styling
+- all browser logic
+- drag/drop
+- filtering
+- persistence
+- live coaching
+
+### `requirements.txt`
+
+- Python runtime dependencies
+
+### `scripts/start-chaos-triage.cmd`
+
+- simple Windows entry point
+
+### `scripts/start-chaos-triage.ps1`
+
+- Windows bootstrap orchestration
+
+
+## 40. Final Mental Model
+
+The easiest way to think about Chaos-Triage is this:
+
+- commas create the first draft of the task list
+- the LLM turns that into structured work with categories, reasons, and first moves
+- the backend cleans and stabilizes the output
+- the frontend turns the result into a board you can actually work from
+- the AI gives the initial plan
+- the human takes over from there
+
+That split is the core product idea:
+
+- AI for structure
+- human for execution
