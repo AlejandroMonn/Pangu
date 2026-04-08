@@ -11,6 +11,8 @@ $OllamaExe = Join-Path $env:LOCALAPPDATA "Programs\Ollama\ollama.exe"
 $RequirementsPath = Join-Path $ProjectWin "requirements.txt"
 $InstallStamp = Join-Path $ProjectWin ".windows-python-requirements-installed"
 $PidFile = Join-Path $ProjectWin ".chaos-triage.pid"
+$StdoutLog = Join-Path $ProjectWin "py-stdout.log"
+$StderrLog = Join-Path $ProjectWin "py-stderr.log"
 $PythonCandidates = @(
   (Join-Path $env:LOCALAPPDATA "Programs\Python\Python314\python.exe"),
   (Join-Path $env:LOCALAPPDATA "Programs\Python\Python313\python.exe"),
@@ -67,6 +69,16 @@ function Ensure-WindowsPythonDeps {
     $NeedsInstall = (Get-Item $RequirementsPath).LastWriteTimeUtc -gt (Get-Item $InstallStamp).LastWriteTimeUtc
   }
 
+  if (-not $NeedsInstall) {
+    $ImportCheck = Start-Process `
+      -FilePath $PythonExe `
+      -ArgumentList @("-c", "import fastapi, uvicorn, ollama") `
+      -Wait `
+      -PassThru `
+      -WindowStyle Hidden
+    $NeedsInstall = $ImportCheck.ExitCode -ne 0
+  }
+
   if ($NeedsInstall) {
     Invoke-PythonChecked -PythonExe $PythonExe -Arguments @("-m", "pip", "install", "--user", "--upgrade", "pip")
     Invoke-PythonChecked -PythonExe $PythonExe -Arguments @("-m", "pip", "install", "--user", "-r", $RequirementsPath)
@@ -85,6 +97,14 @@ function Stop-PreviousServer {
 
   if (Test-Path $PidFile) {
     Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+  }
+
+  if (Test-Path $StdoutLog) {
+    Remove-Item $StdoutLog -Force -ErrorAction SilentlyContinue
+  }
+
+  if (Test-Path $StderrLog) {
+    Remove-Item $StderrLog -Force -ErrorAction SilentlyContinue
   }
 }
 
@@ -113,13 +133,29 @@ $WarmPayload = @{
 $WarmCommand = "try { Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/generate' -Method Post -ContentType 'application/json' -Body '$($WarmPayload.Replace("'", "''"))' -TimeoutSec 180 | Out-Null } catch {}"
 Start-Process -FilePath "powershell.exe" -WindowStyle Hidden -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $WarmCommand | Out-Null
 
-$ServerCommand = "set OLLAMA_MODEL=$Model && `"$WindowsPython`" -m uvicorn main:app --host 127.0.0.1 --port 8000"
-$ServerProcess = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", $ServerCommand -WorkingDirectory $ProjectWin -WindowStyle Hidden -PassThru
+$env:OLLAMA_MODEL = $Model
+$ServerProcess = Start-Process `
+  -FilePath $WindowsPython `
+  -ArgumentList @("-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8000") `
+  -WorkingDirectory $ProjectWin `
+  -WindowStyle Hidden `
+  -RedirectStandardOutput $StdoutLog `
+  -RedirectStandardError $StderrLog `
+  -PassThru
 Set-Content -Path $PidFile -Value $ServerProcess.Id
 Start-Sleep -Seconds 2
 
 if (-not (Wait-Http -Url "http://127.0.0.1:8000/api/health")) {
-  throw "Chaos-Triage did not become ready on http://127.0.0.1:8000"
+  $stderrPreview = ""
+  if (Test-Path $StderrLog) {
+    $stderrPreview = (Get-Content $StderrLog -Raw -ErrorAction SilentlyContinue).Trim()
+  }
+
+  if ([string]::IsNullOrWhiteSpace($stderrPreview)) {
+    throw "Chaos-Triage did not become ready on http://127.0.0.1:8000"
+  }
+
+  throw "Chaos-Triage did not become ready on http://127.0.0.1:8000`n`nBackend stderr:`n$stderrPreview"
 }
 
 if (-not $NoBrowser) {

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -45,17 +45,17 @@
         <div class="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-glow backdrop-blur-xl sm:p-8">
           <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p class="text-xs uppercase tracking-[0.22em] text-cyan-300">Chaos-Triage</p>
-              <h1 class="mt-1 text-3xl font-semibold leading-tight text-white sm:text-4xl">Turn your brain dump into a calmer plan for the day</h1>
+              <p class="text-xs uppercase tracking-[0.22em] text-cyan-300">PANGU</p>
+              <h1 class="mt-1 text-3xl font-semibold leading-tight text-white sm:text-4xl">Convierte tu descarga mental en un plan claro para hoy</h1>
             </div>
-            <span class="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100">Local + Private</span>
+            <span class="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100">Local + Privado</span>
           </div>
 
-          <label for="brainDump" class="mb-2 block text-sm text-slate-300">Drop every messy thought here</label>
+          <label for="brainDump" class="mb-2 block text-sm text-slate-300">Escribe aquí todo lo que tienes en la cabeza</label>
           <textarea
             id="brainDump"
             rows="10"
-            placeholder="Example: finish deploy, test onboarding flow, watch 2 YouTube videos, clean hamster cage, catch up lecture notes... Each comma becomes a new task seed."
+            placeholder="Ejemplo: terminar deploy, probar onboarding, ver 2 videos de YouTube, limpiar la jaula del hamster, ponerme al día con apuntes... Cada coma se toma como una nueva tarea."
             class="w-full resize-y rounded-2xl border border-white/10 bg-slate-900/70 p-4 text-slate-100 placeholder-slate-500 outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
           ></textarea>
 
@@ -64,17 +64,17 @@
               id="organizeBtn"
               class="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <span id="btnText">Organize My Chaos</span>
+              <span id="btnText">Organizar Mi Caos</span>
               <svg id="btnSpinner" class="hidden h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
                 <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.25" stroke-width="4"></circle>
                 <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" stroke-width="4" stroke-linecap="round"></path>
               </svg>
             </button>
-            <p class="text-xs text-slate-400">Powered by your local Ollama model.</p>
+            <p class="text-xs text-slate-400">Impulsado por tu modelo local en Ollama.</p>
           </div>
 
           <p id="errorMsg" class="mt-4 hidden rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200"></p>
-          <p class="mt-3 text-xs text-slate-500">Tip: use commas to separate tasks. The app treats each comma chunk as a task seed, then only splits very obvious multi-action phrases.</p>
+          <p class="mt-3 text-xs text-slate-500">Tip: usa comas para separar tareas. La app toma cada bloque separado por comas como una semilla de tarea y solo divide frases muy obvias con varias acciones.</p>
         </div>
       </section>
 
@@ -82,44 +82,17 @@
         <div class="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-glow backdrop-blur-xl sm:p-8">
           <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p class="text-xs uppercase tracking-[0.22em] text-cyan-300">Human Plan</p>
-              <h2 class="mt-1 text-3xl font-semibold text-white">A clearer way to move through the day</h2>
+              <p class="text-xs uppercase tracking-[0.22em] text-cyan-300">Plan Humano</p>
+              <h2 class="mt-1 text-3xl font-semibold text-white">Una forma más clara de moverte durante el día</h2>
               <p id="summaryText" class="mt-2 max-w-3xl text-sm text-slate-300"></p>
             </div>
             <span id="modelTag" class="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-slate-300"></span>
           </div>
 
-          <div class="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-            <div class="rounded-2xl border border-cyan-300/20 bg-cyan-300/10 p-4">
-              <p class="text-[11px] uppercase tracking-[0.18em] text-cyan-100">Now</p>
-              <p id="summaryNow" class="mt-2 text-sm font-medium text-white"></p>
-            </div>
-            <div class="rounded-2xl border border-white/10 bg-slate-900/55 p-4">
-              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Next</p>
-              <p id="summaryNext" class="mt-2 text-sm font-medium text-white"></p>
-            </div>
-            <div class="rounded-2xl border border-white/10 bg-slate-900/55 p-4">
-              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Later</p>
-              <p id="summaryLater" class="mt-2 text-sm font-medium text-white"></p>
-            </div>
-            <div class="rounded-2xl border border-amber-300/20 bg-amber-300/10 p-4">
-              <p class="text-[11px] uppercase tracking-[0.18em] text-amber-100">Doing</p>
-              <p id="summaryDoing" class="mt-2 text-sm font-medium text-white"></p>
-            </div>
-            <div class="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4">
-              <p class="text-[11px] uppercase tracking-[0.18em] text-emerald-100">Done</p>
-              <p id="summaryDone" class="mt-2 text-sm font-medium text-white"></p>
-            </div>
-            <div class="rounded-2xl border border-white/10 bg-slate-900/55 p-4">
-              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Filter</p>
-              <p id="summaryFilter" class="mt-2 text-sm font-medium text-white"></p>
-            </div>
-          </div>
-
           <div class="mb-6 rounded-3xl border border-white/10 bg-slate-900/55 p-5">
             <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Human Plan</p>
+                <p class="text-xs uppercase tracking-[0.18em] text-slate-400">Plan Humano</p>
                 <h3 id="coachIntro" class="mt-1 text-2xl font-semibold text-white"></h3>
               </div>
               <span id="coachMode" class="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-slate-300"></span>
@@ -131,13 +104,13 @@
                 <p id="coachFocus" class="mt-2 text-sm leading-6 text-slate-100"></p>
               </div>
               <div class="rounded-2xl border border-orange-300/20 bg-orange-300/10 p-4">
-                <p class="text-[11px] uppercase tracking-[0.18em] text-orange-100">Caution</p>
+                <p class="text-[11px] uppercase tracking-[0.18em] text-orange-100">Cuidado</p>
                 <p id="coachCaution" class="mt-2 text-sm leading-6 text-slate-100"></p>
               </div>
             </div>
 
             <div class="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
-              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Coach Steps</p>
+              <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Pasos Sugeridos</p>
               <ol id="coachSteps" class="mt-3 space-y-3 text-sm text-slate-200"></ol>
             </div>
           </div>
@@ -145,39 +118,39 @@
           <div class="mb-6 rounded-2xl border border-white/10 bg-slate-900/45 p-4">
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 class="text-sm font-semibold text-white">Topic Filters</h3>
-                <p class="text-xs text-slate-400">Focus on one area or keep the whole board visible.</p>
+                <h3 class="text-sm font-semibold text-white">Filtros por Tema</h3>
+                <p class="text-xs text-slate-400">Enfócate en un área o mantén visible todo el tablero.</p>
               </div>
               <div id="filterBar" class="flex flex-wrap gap-2"></div>
             </div>
           </div>
 
           <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <p class="text-sm text-slate-300">Drag cards between columns to shape the real order of your day.</p>
+            <p class="text-sm text-slate-300">Arrastra tarjetas entre columnas para definir el orden real de tu día.</p>
             <p id="boardHint" class="text-xs text-slate-500"></p>
           </div>
 
           <div class="grid gap-4 xl:grid-cols-3">
             <section class="rounded-2xl border border-cyan-300/20 bg-slate-900/50 p-4">
               <div class="mb-4">
-                <h3 class="text-lg font-semibold text-white">Backlog</h3>
-                <p class="text-xs text-slate-400">Suggested order, but fully yours to reshape.</p>
+                <h3 class="text-lg font-semibold text-white">Pendientes</h3>
+                <p class="text-xs text-slate-400">Orden sugerido, pero totalmente tuyo para reorganizar.</p>
               </div>
               <div id="backlogList" data-column="backlog" class="space-y-3 min-h-[8rem]"></div>
             </section>
 
             <section class="rounded-2xl border border-amber-300/20 bg-slate-900/50 p-4">
               <div class="mb-4">
-                <h3 class="text-lg font-semibold text-white">In Progress</h3>
-                <p class="text-xs text-slate-400">Only the cards you intentionally pulled into motion.</p>
+                <h3 class="text-lg font-semibold text-white">En Progreso</h3>
+                <p class="text-xs text-slate-400">Solo las tarjetas que moviste intencionalmente para empezar.</p>
               </div>
               <div id="progressList" data-column="in_progress" class="space-y-3 min-h-[8rem]"></div>
             </section>
 
             <section class="rounded-2xl border border-emerald-300/20 bg-slate-900/50 p-4">
               <div class="mb-4">
-                <h3 class="text-lg font-semibold text-white">Done</h3>
-                <p class="text-xs text-slate-400">Keep wins visible. Momentum matters.</p>
+                <h3 class="text-lg font-semibold text-white">Completadas</h3>
+                <p class="text-xs text-slate-400">Mantén visibles las victorias. El impulso importa.</p>
               </div>
               <div id="doneList" data-column="done" class="space-y-3 min-h-[8rem]"></div>
             </section>
@@ -188,16 +161,16 @@
 
     <script>
       const CATEGORY_META = {
-        personal_space: { label: 'Personal Space', border: 'border-emerald-300/30', pill: 'bg-emerald-400/15 text-emerald-100' },
-        university: { label: 'University', border: 'border-amber-300/30', pill: 'bg-amber-400/15 text-amber-100' },
-        kinetiq_business: { label: 'Kinetiq Business', border: 'border-cyan-300/30', pill: 'bg-cyan-400/15 text-cyan-100' },
-        consumption: { label: 'Consumption', border: 'border-fuchsia-300/30', pill: 'bg-fuchsia-400/15 text-fuchsia-100' }
+        personal_space: { label: 'Espacio Personal', border: 'border-emerald-300/30', pill: 'bg-emerald-400/15 text-emerald-100' },
+        university: { label: 'Universidad', border: 'border-amber-300/30', pill: 'bg-amber-400/15 text-amber-100' },
+        kinetiq_business: { label: 'Kinetiq / Negocio', border: 'border-cyan-300/30', pill: 'bg-cyan-400/15 text-cyan-100' },
+        consumption: { label: 'Consumo', border: 'border-fuchsia-300/30', pill: 'bg-fuchsia-400/15 text-fuchsia-100' }
       };
 
       const COLUMN_META = {
-        backlog: { label: 'Backlog', empty: 'No hay tareas en backlog con este filtro.' },
-        in_progress: { label: 'In Progress', empty: 'Arrastra una tarjeta aqui cuando realmente la empieces.' },
-        done: { label: 'Done', empty: 'Las tareas terminadas apareceran aqui.' }
+        backlog: { label: 'Pendientes', empty: 'No hay tareas pendientes con este filtro.' },
+        in_progress: { label: 'En Progreso', empty: 'Arrastra una tarjeta aquí cuando realmente la empieces.' },
+        done: { label: 'Completadas', empty: 'Las tareas terminadas aparecerán aquí.' }
       };
 
       const URGENCY_STYLE = {
@@ -214,12 +187,6 @@
       const resultsSection = document.getElementById('resultsSection');
       const summaryText = document.getElementById('summaryText');
       const modelTag = document.getElementById('modelTag');
-      const summaryNow = document.getElementById('summaryNow');
-      const summaryNext = document.getElementById('summaryNext');
-      const summaryLater = document.getElementById('summaryLater');
-      const summaryDoing = document.getElementById('summaryDoing');
-      const summaryDone = document.getElementById('summaryDone');
-      const summaryFilter = document.getElementById('summaryFilter');
       const coachIntro = document.getElementById('coachIntro');
       const coachMode = document.getElementById('coachMode');
       const coachFocus = document.getElementById('coachFocus');
@@ -244,7 +211,7 @@
       function setLoading(isLoading) {
         organizeBtn.disabled = isLoading;
         btnSpinner.classList.toggle('hidden', !isLoading);
-        btnText.textContent = isLoading ? 'Organizing...' : 'Organize My Chaos';
+        btnText.textContent = isLoading ? 'Organizando...' : 'Organizar Mi Caos';
       }
 
       function showError(message) {
@@ -367,18 +334,6 @@
         return getColumnTasks(column).filter((task) => taskMatchesFilterId(taskId(task)));
       }
 
-      function renderSummaryStrip() {
-        const backlog = getFilteredColumnTasks('backlog');
-        const doing = getFilteredColumnTasks('in_progress');
-        const done = getFilteredColumnTasks('done');
-        summaryNow.textContent = backlog[0] ? backlog[0].title : 'No backlog visible';
-        summaryNext.textContent = backlog[1] ? backlog[1].title : 'Luego sigue con el siguiente bloque libre.';
-        summaryLater.textContent = backlog[2] ? backlog[2].title : 'Then keep going through the backlog con calma.';
-        summaryDoing.textContent = `${doing.length} active`;
-        summaryDone.textContent = `${done.length} closed`;
-        summaryFilter.textContent = currentFilter === 'all' ? 'All topics' : (CATEGORY_META[currentFilter]?.label || currentFilter);
-      }
-
       function buildLiveCoach() {
         const backlog = getFilteredColumnTasks('backlog');
         const doing = getFilteredColumnTasks('in_progress');
@@ -391,7 +346,7 @@
         if (!first) {
           return {
             intro: 'No hay tareas visibles con este filtro.',
-            focus: 'Cambia el filtro a All topics para recuperar el plan completo.',
+            focus: 'Cambia el filtro a Todos los temas para recuperar el plan completo.',
             caution: 'No hace falta inventar trabajo nuevo; solo vuelve a una vista con tareas reales.',
             steps: [
               '1. Cambia el filtro.',
@@ -403,29 +358,29 @@
 
         return {
           intro: doing.length
-            ? `Vas bien. Ya moviste ${doing[0].title} a In Progress; ahora la clave es sostener el ritmo sin abrir veinte frentes.`
+            ? `Vas bien. Ya moviste ${doing[0].title} a En Progreso; ahora la clave es sostener el ritmo sin abrir veinte frentes.`
             : 'Hoy no necesitas hacerlo todo de golpe. Solo necesitas una secuencia clara, humana y sostenible.',
           focus: backlog.length
             ? `Empieza por ${backlog[0].title} y piensa solo en este arranque: ${backlog[0].first_move}.`
-            : `Si no hay backlog visible, sigue con ${first.title} hasta cerrar un bloque concreto antes de saltar a otra cosa.`,
+            : `Si no hay tareas visibles en Pendientes, sigue con ${first.title} hasta cerrar un bloque concreto antes de saltar a otra cosa.`,
           caution: visibleReward
-            ? 'Ojo: deja el contenido de reward para el final. Primero cierra lo que realmente te va a bajar la ansiedad.'
-            : 'Ojo con cambiar de contexto demasiado rapido. One block at a time te va a rendir mejor.',
+            ? 'Ojo: deja el contenido de recompensa para el final. Primero cierra lo que realmente te va a bajar la ansiedad.'
+            : 'Ojo con cambiar de contexto demasiado rápido. Un bloque a la vez te va a rendir mejor.',
           steps: [
-            `1. Start con ${first.title}.`,
+            `1. Empieza con ${first.title}.`,
             second
               ? `2. Luego mueve ${second.title} sin sobrepensar la transicion.`
-              : '2. Luego revisa el backlog y elige el siguiente bloque mas liviano.',
+              : '2. Luego revisa Pendientes y elige el siguiente bloque más liviano.',
             third
-              ? `3. Despues entra a ${third.title} y termina ese bloque antes de abrir reward.`
-              : '3. Despues haz una pausa corta y sigue con el siguiente bloque util.'
+              ? `3. Después entra a ${third.title} y termina ese bloque antes de abrir una recompensa.`
+              : '3. Después haz una pausa corta y sigue con el siguiente bloque útil.'
           ]
         };
       }
 
       function renderCoach() {
         const coach = (!hasInteracted && currentFilter === 'all' && initialCoach) ? initialCoach : buildLiveCoach();
-        coachMode.textContent = (!hasInteracted && currentFilter === 'all' && initialCoach) ? 'AI Coach' : 'Live Coach';
+        coachMode.textContent = 'Estrategia';
         coachIntro.textContent = coach.intro || 'Hoy vamos a bajar el caos con una secuencia simple.';
         coachFocus.textContent = coach.focus || 'Empieza por una sola accion visible.';
         coachCaution.textContent = coach.caution || 'No abras nuevas tareas antes de cerrar un bloque.';
@@ -439,7 +394,7 @@
         if (!topics.includes(currentFilter)) currentFilter = 'all';
         filterBar.innerHTML = topics.map((topic) => {
           const active = topic === currentFilter;
-          const label = topic === 'all' ? 'All topics' : (CATEGORY_META[topic]?.label || topic);
+          const label = topic === 'all' ? 'Todos los temas' : (CATEGORY_META[topic]?.label || topic);
           const activeClass = active ? 'bg-cyan-300 text-slate-950' : 'bg-white/5 text-slate-300';
           return `<button type="button" data-filter="${escapeHtml(topic)}" class="rounded-full px-3 py-1 text-xs transition ${activeClass}">${escapeHtml(label)}</button>`;
         }).join('');
@@ -463,51 +418,46 @@
 
       function renderCard(task, column, index) {
         const id = taskId(task);
-        const expanded = Boolean(expandedState[id]);
         const meta = CATEGORY_META[task.category] || CATEGORY_META.personal_space;
-        const urgencyClass = URGENCY_STYLE[task.urgency] || URGENCY_STYLE.medium;
-        const positionLabel = column === 'backlog' ? `Backlog #${index + 1}` : (column === 'in_progress' ? 'Doing' : 'Done');
+        const positionLabel = column === 'backlog' ? `Pendiente #${index + 1}` : (column === 'in_progress' ? 'En progreso' : 'Completada');
         return `
-          <article data-task-id="${escapeHtml(id)}" class="rounded-2xl border ${meta.border} bg-gradient-to-br from-slate-900/90 via-slate-900/75 to-slate-800/65 p-4 shadow-lg">
+          <article data-task-id="${escapeHtml(id)}" class="rounded-2xl border ${meta.border} bg-gradient-to-br from-slate-900/90 via-slate-900/75 to-slate-800/65 p-3 shadow-lg">
             <div class="flex items-start gap-3">
               <button type="button" class="drag-handle mt-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-300 transition hover:bg-white/10" aria-label="Drag task">::</button>
               <div class="min-w-0 flex-1">
-                <button type="button" data-action="toggle-expand" data-task-id="${escapeHtml(id)}" class="w-full text-left">
-                  <div class="flex items-start justify-between gap-3">
-                    <div class="min-w-0">
-                      <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">${escapeHtml(positionLabel)}</p>
-                      <h4 class="mt-1 truncate text-base font-semibold text-white">${escapeHtml(task.title)}</h4>
-                    </div>
-                    <span class="rounded-full border px-2.5 py-1 text-xs ${urgencyClass}">${escapeHtml(task.urgency)}</span>
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">${escapeHtml(positionLabel)}</p>
+                    <h4 class="mt-1 truncate text-base font-semibold text-white">${escapeHtml(task.title)}</h4>
                   </div>
-                  <p class="mt-2 text-sm text-slate-300">${escapeHtml(task.first_move)}</p>
-                </button>
+                </div>
                 <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
                   <span class="rounded-full px-3 py-1 ${meta.pill}">${escapeHtml(meta.label)}</span>
                   <span class="rounded-full bg-black/20 px-3 py-1">${task.estimated_minutes} min</span>
-                  <span class="rounded-full bg-black/20 px-3 py-1">${escapeHtml(task.energy_level)} energy</span>
+                  <span class="rounded-full bg-black/20 px-3 py-1">${escapeHtml(task.energy_level)} energía</span>
                 </div>
-                ${expanded ? `
-                  <div class="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                <details class="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+                  <summary class="cursor-pointer text-sm font-medium text-cyan-200 outline-none">Ver detalles</summary>
+                  <div class="mt-3 space-y-3">
                     <div class="rounded-2xl bg-white/5 p-3">
-                      <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Details</p>
+                      <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Detalles</p>
                       <p class="mt-1 text-sm leading-6 text-slate-200">${escapeHtml(task.details)}</p>
                     </div>
                     <div class="mt-3 rounded-2xl bg-cyan-400/10 p-3">
-                      <p class="text-[11px] uppercase tracking-[0.18em] text-cyan-100">First Move</p>
+                      <p class="text-[11px] uppercase tracking-[0.18em] text-cyan-100">Primer Paso</p>
                       <p class="mt-1 text-sm text-slate-100">${escapeHtml(task.first_move)}</p>
                     </div>
                     <div class="mt-3 rounded-2xl bg-white/5 p-3">
-                      <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Reason</p>
+                      <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Motivo</p>
                       <p class="mt-1 text-sm text-slate-200">${escapeHtml(task.reason)}</p>
                     </div>
                     <div class="mt-4 flex flex-wrap gap-2 text-xs">
-                      <button type="button" data-action="move-backlog" data-task-id="${escapeHtml(id)}" class="rounded-full px-3 py-1 transition ${statusButtonClasses(column === 'backlog')}">Back to Backlog</button>
-                      <button type="button" data-action="move-progress" data-task-id="${escapeHtml(id)}" class="rounded-full px-3 py-1 transition ${statusButtonClasses(column === 'in_progress')}">Start</button>
-                      <button type="button" data-action="move-done" data-task-id="${escapeHtml(id)}" class="rounded-full px-3 py-1 transition ${statusButtonClasses(column === 'done')}">Done</button>
+                      <button type="button" data-action="move-backlog" data-task-id="${escapeHtml(id)}" class="rounded-full px-3 py-1 transition ${statusButtonClasses(column === 'backlog')}">Volver a Pendientes</button>
+                      <button type="button" data-action="move-progress" data-task-id="${escapeHtml(id)}" class="rounded-full bg-teal-500 px-3 py-1 font-semibold text-white transition hover:bg-teal-400">Empezar</button>
+                      <button type="button" data-action="move-done" data-task-id="${escapeHtml(id)}" class="rounded-full px-3 py-1 transition ${statusButtonClasses(column === 'done')}">Completar</button>
                     </div>
                   </div>
-                ` : ''}
+                </details>
               </div>
             </div>
           </article>
@@ -620,13 +570,6 @@
             const action = button.dataset.action;
             const id = button.dataset.taskId;
             if (!action || !id) return;
-
-            if (action === 'toggle-expand') {
-              expandedState[id] = !expandedState[id];
-              persistState();
-              renderPlan();
-              return;
-            }
             if (action === 'move-backlog') {
               moveTaskToColumn(id, 'backlog');
               return;
@@ -647,15 +590,14 @@
         renderColumn('in_progress', progressList);
         renderColumn('done', doneList);
         boardHint.textContent = currentFilter === 'all'
-          ? 'Tip: drag in Backlog to define the real execution order.'
-          : `Filter active: ${CATEGORY_META[currentFilter]?.label || currentFilter}. Dragging still updates the filtered view.`;
+          ? 'Tip: arrastra en Pendientes para definir el orden real de ejecución.'
+          : `Filtro activo: ${CATEGORY_META[currentFilter]?.label || currentFilter}. Arrastrar sigue actualizando la vista filtrada.`;
         attachCardActions();
         initSortables();
       }
 
       function renderPlan() {
         if (!currentPlan) return;
-        renderSummaryStrip();
         renderCoach();
         renderFilters();
         renderBoard();
@@ -666,8 +608,8 @@
         initialCoach = data.coach || null;
         setTaskMap(data.tasks);
         loadPersistedState(data.tasks);
-        summaryText.textContent = data.summary || 'Plan generated.';
-        modelTag.textContent = data.meta?.transport ? `Model: ${data.meta.model} via ${data.meta.transport}` : `Model: ${data.meta?.model || 'local'}`;
+        summaryText.textContent = data.summary || 'Plan generado.';
+        modelTag.textContent = data.meta?.transport ? `Modelo: ${data.meta.model} vía ${data.meta.transport}` : `Modelo: ${data.meta?.model || 'local'}`;
         renderPlan();
         resultsSection.classList.remove('hidden');
       }
@@ -675,7 +617,7 @@
       async function runTriage() {
         const text = brainDump.value.trim();
         if (!text) {
-          showError('Please add your brain dump first.');
+          showError('Primero agrega tu descarga mental.');
           return;
         }
 
@@ -691,7 +633,7 @@
 
           const data = await response.json();
           if (!response.ok) {
-            const detail = typeof data.detail === 'string' ? data.detail : data.detail?.message || 'Failed to organize your chaos.';
+            const detail = typeof data.detail === 'string' ? data.detail : data.detail?.message || 'No se pudo organizar tu caos.';
             throw new Error(detail);
           }
 
@@ -700,8 +642,8 @@
           resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } catch (err) {
           const message = err && err.message === 'Failed to fetch'
-            ? 'Backend not reachable. Run scripts/start-chaos-triage.cmd and refresh this page.'
-            : (err.message || 'Something went wrong while organizing your tasks.');
+            ? 'No se pudo conectar con el backend. Ejecuta scripts/start-chaos-triage.cmd y recarga esta página.'
+            : (err.message || 'Algo salió mal al organizar tus tareas.');
           showError(message);
         } finally {
           setLoading(false);
