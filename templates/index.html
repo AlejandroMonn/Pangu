@@ -32,6 +32,72 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      .task-card {
+        transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, opacity 160ms ease;
+      }
+
+      .task-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 18px 42px rgba(8, 145, 178, 0.14);
+      }
+
+      .task-card:active {
+        cursor: grabbing;
+      }
+
+      .task-card.sortable-ghost {
+        opacity: 0.22;
+      }
+
+      .task-card.sortable-chosen {
+        border-color: rgba(103, 232, 249, 0.65);
+        box-shadow: 0 0 0 1px rgba(103, 232, 249, 0.28), 0 16px 40px rgba(6, 182, 212, 0.22);
+      }
+
+      .task-card.sortable-drag {
+        opacity: 0.95 !important;
+        transform: rotate(1deg) scale(1.02);
+        box-shadow: 0 24px 48px rgba(2, 132, 199, 0.28);
+      }
+
+      .kanban-shell {
+        transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+      }
+
+      .kanban-shell.is-drop-ready {
+        border-style: dashed;
+        border-color: rgba(125, 211, 252, 0.36);
+        background: rgba(15, 23, 42, 0.72);
+      }
+
+      .kanban-shell.is-drop-target {
+        border-style: dashed;
+        border-color: rgba(34, 211, 238, 0.72);
+        background: linear-gradient(180deg, rgba(8, 47, 73, 0.42), rgba(15, 23, 42, 0.82));
+        box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.18), 0 0 32px rgba(6, 182, 212, 0.16);
+        transform: translateY(-2px);
+      }
+
+      .kanban-list.is-drop-target {
+        min-height: 10rem;
+      }
+
+      .kanban-list.is-drop-target::after {
+        content: "Suelta la tarjeta aqui";
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 4.75rem;
+        border: 1px dashed rgba(103, 232, 249, 0.38);
+        border-radius: 1rem;
+        color: rgb(165 243 252);
+        font-size: 0.8rem;
+        letter-spacing: 0.02em;
+        background: rgba(8, 47, 73, 0.24);
+        margin-top: 0.5rem;
+      }
+    </style>
   </head>
   <body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
     <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
@@ -131,28 +197,28 @@
           </div>
 
           <div class="grid gap-4 xl:grid-cols-3">
-            <section class="rounded-2xl border border-cyan-300/20 bg-slate-900/50 p-4">
+            <section data-column-shell="backlog" class="kanban-shell rounded-2xl border border-cyan-300/20 bg-slate-900/50 p-4">
               <div class="mb-4">
                 <h3 class="text-lg font-semibold text-white">Pendientes</h3>
                 <p class="text-xs text-slate-400">Orden sugerido, pero totalmente tuyo para reorganizar.</p>
               </div>
-              <div id="backlogList" data-column="backlog" class="space-y-3 min-h-[8rem]"></div>
+              <div id="backlogList" data-column="backlog" class="kanban-list space-y-3 min-h-[8rem]"></div>
             </section>
 
-            <section class="rounded-2xl border border-amber-300/20 bg-slate-900/50 p-4">
+            <section data-column-shell="in_progress" class="kanban-shell rounded-2xl border border-amber-300/20 bg-slate-900/50 p-4">
               <div class="mb-4">
                 <h3 class="text-lg font-semibold text-white">En Progreso</h3>
                 <p class="text-xs text-slate-400">Solo las tarjetas que moviste intencionalmente para empezar.</p>
               </div>
-              <div id="progressList" data-column="in_progress" class="space-y-3 min-h-[8rem]"></div>
+              <div id="progressList" data-column="in_progress" class="kanban-list space-y-3 min-h-[8rem]"></div>
             </section>
 
-            <section class="rounded-2xl border border-emerald-300/20 bg-slate-900/50 p-4">
+            <section data-column-shell="done" class="kanban-shell rounded-2xl border border-emerald-300/20 bg-slate-900/50 p-4">
               <div class="mb-4">
                 <h3 class="text-lg font-semibold text-white">Completadas</h3>
                 <p class="text-xs text-slate-400">Mantén visibles las victorias. El impulso importa.</p>
               </div>
-              <div id="doneList" data-column="done" class="space-y-3 min-h-[8rem]"></div>
+              <div id="doneList" data-column="done" class="kanban-list space-y-3 min-h-[8rem]"></div>
             </section>
           </div>
         </div>
@@ -160,12 +226,14 @@
     </main>
 
     <script>
-      const CATEGORY_META = {
-        personal_space: { label: 'Espacio Personal', border: 'border-emerald-300/30', pill: 'bg-emerald-400/15 text-emerald-100' },
-        university: { label: 'Universidad', border: 'border-amber-300/30', pill: 'bg-amber-400/15 text-amber-100' },
-        kinetiq_business: { label: 'Kinetiq / Negocio', border: 'border-cyan-300/30', pill: 'bg-cyan-400/15 text-cyan-100' },
-        consumption: { label: 'Consumo', border: 'border-fuchsia-300/30', pill: 'bg-fuchsia-400/15 text-fuchsia-100' }
-      };
+      const TOPIC_STYLE_PALETTE = [
+        { border: 'border-cyan-300/30', pill: 'bg-cyan-400/15 text-cyan-100' },
+        { border: 'border-emerald-300/30', pill: 'bg-emerald-400/15 text-emerald-100' },
+        { border: 'border-amber-300/30', pill: 'bg-amber-400/15 text-amber-100' },
+        { border: 'border-fuchsia-300/30', pill: 'bg-fuchsia-400/15 text-fuchsia-100' },
+        { border: 'border-orange-300/30', pill: 'bg-orange-400/15 text-orange-100' },
+        { border: 'border-sky-300/30', pill: 'bg-sky-400/15 text-sky-100' }
+      ];
 
       const COLUMN_META = {
         backlog: { label: 'Pendientes', empty: 'No hay tareas pendientes con este filtro.' },
@@ -203,10 +271,10 @@
       let taskMap = new Map();
       let boardState = { backlog: [], in_progress: [], done: [] };
       let taskStatus = {};
-      let expandedState = {};
       let currentFilter = 'all';
       let hasInteracted = false;
       let sortables = [];
+      let activeDropColumn = null;
 
       function setLoading(isLoading) {
         organizeBtn.disabled = isLoading;
@@ -246,6 +314,38 @@
         taskMap = new Map(tasks.map((task) => [taskId(task), task]));
       }
 
+      function hashTopic(topic) {
+        const value = String(topic || 'General');
+        let hash = 0;
+        for (let index = 0; index < value.length; index += 1) {
+          hash = ((hash << 5) - hash) + value.charCodeAt(index);
+          hash |= 0;
+        }
+        return Math.abs(hash);
+      }
+
+      function topicMeta(topic) {
+        const label = String(topic || 'General').trim() || 'General';
+        const style = TOPIC_STYLE_PALETTE[hashTopic(label) % TOPIC_STYLE_PALETTE.length];
+        return { label, ...style };
+      }
+
+      function planTopics() {
+        if (!currentPlan) return [];
+        const rawTopics = Array.isArray(currentPlan.topics) && currentPlan.topics.length
+          ? currentPlan.topics
+          : currentPlan.tasks.map((task) => task.topic);
+        const seen = new Set();
+        return rawTopics.filter((topic) => {
+          const normalized = String(topic || '').trim();
+          if (!normalized) return false;
+          const key = normalized.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      }
+
       function deriveStatusFromColumns() {
         const next = {};
         Object.entries(boardState).forEach(([column, ids]) => {
@@ -278,7 +378,6 @@
         const ids = baseBoard.backlog;
         const storedColumns = JSON.parse(localStorage.getItem(storageKey('columns')) || '{}');
         const storedStatus = JSON.parse(localStorage.getItem(storageKey('status')) || '{}');
-        const storedExpanded = JSON.parse(localStorage.getItem(storageKey('expanded')) || '{}');
         const storedFilter = localStorage.getItem(storageKey('filter')) || 'all';
         const nextBoard = { backlog: [], in_progress: [], done: [] };
         const seen = new Set();
@@ -302,28 +401,21 @@
         boardState = nextBoard;
         deriveStatusFromColumns();
 
-        expandedState = {};
-        ids.forEach((id) => {
-          expandedState[id] = Boolean(storedExpanded[id]);
-        });
-
         currentFilter = storedFilter;
         const boardChanged = JSON.stringify(baseBoard) !== JSON.stringify(nextBoard);
-        const anyExpanded = Object.values(expandedState).some(Boolean);
-        hasInteracted = boardChanged || anyExpanded || currentFilter !== 'all';
+        hasInteracted = boardChanged || currentFilter !== 'all';
       }
 
       function persistState() {
         localStorage.setItem(storageKey('columns'), JSON.stringify(boardState));
         localStorage.setItem(storageKey('status'), JSON.stringify(taskStatus));
-        localStorage.setItem(storageKey('expanded'), JSON.stringify(expandedState));
         localStorage.setItem(storageKey('filter'), currentFilter);
       }
 
       function taskMatchesFilterId(id) {
         if (currentFilter === 'all') return true;
         const task = taskMap.get(id);
-        return Boolean(task && task.category === currentFilter);
+        return Boolean(task && task.topic === currentFilter);
       }
 
       function getColumnTasks(column) {
@@ -341,7 +433,7 @@
         const first = backlog[0] || doing[0] || done[0] || currentPlan.tasks[0];
         const second = backlog[1] || doing[1] || currentPlan.tasks[1] || null;
         const third = backlog[2] || currentPlan.tasks[2] || null;
-        const visibleReward = [...backlog, ...doing].some((task) => task.category === 'consumption');
+        const hasLowPriorityTail = backlog.some((task) => task.lane === 'done_later');
 
         if (!first) {
           return {
@@ -361,10 +453,10 @@
             ? `Vas bien. Ya moviste ${doing[0].title} a En Progreso; ahora la clave es sostener el ritmo sin abrir veinte frentes.`
             : 'Hoy no necesitas hacerlo todo de golpe. Solo necesitas una secuencia clara, humana y sostenible.',
           focus: backlog.length
-            ? `Empieza por ${backlog[0].title} y piensa solo en este arranque: ${backlog[0].first_move}.`
+            ? `Empieza por ${backlog[0].title} y concéntrate solo en cerrar ese primer bloque.`
             : `Si no hay tareas visibles en Pendientes, sigue con ${first.title} hasta cerrar un bloque concreto antes de saltar a otra cosa.`,
-          caution: visibleReward
-            ? 'Ojo: deja el contenido de recompensa para el final. Primero cierra lo que realmente te va a bajar la ansiedad.'
+          caution: hasLowPriorityTail
+            ? 'Ojo: deja las tareas de baja prioridad para más tarde. Primero cierra lo que más te va a despejar el día.'
             : 'Ojo con cambiar de contexto demasiado rápido. Un bloque a la vez te va a rendir mejor.',
           steps: [
             `1. Empieza con ${first.title}.`,
@@ -390,11 +482,11 @@
       }
 
       function renderFilters() {
-        const topics = ['all', ...new Set(currentPlan.tasks.map((task) => task.category))];
+        const topics = ['all', ...planTopics()];
         if (!topics.includes(currentFilter)) currentFilter = 'all';
         filterBar.innerHTML = topics.map((topic) => {
           const active = topic === currentFilter;
-          const label = topic === 'all' ? 'Todos los temas' : (CATEGORY_META[topic]?.label || topic);
+          const label = topic === 'all' ? 'Todos los temas' : topic;
           const activeClass = active ? 'bg-cyan-300 text-slate-950' : 'bg-white/5 text-slate-300';
           return `<button type="button" data-filter="${escapeHtml(topic)}" class="rounded-full px-3 py-1 text-xs transition ${activeClass}">${escapeHtml(label)}</button>`;
         }).join('');
@@ -412,18 +504,43 @@
         });
       }
 
-      function statusButtonClasses(active) {
-        return active ? 'bg-cyan-300 text-slate-950' : 'bg-white/5 text-slate-300';
+      function renderStatusActions(id, column) {
+        if (column === 'backlog') {
+          return `
+            <div class="mt-3 flex flex-wrap gap-2 text-xs">
+              <button type="button" data-action="move-progress" data-task-id="${escapeHtml(id)}" class="rounded-full bg-teal-500 px-3 py-1 font-semibold text-white transition hover:bg-teal-400">Empezar</button>
+              <button type="button" data-action="move-done" data-task-id="${escapeHtml(id)}" class="rounded-full bg-white/5 px-3 py-1 text-slate-300 transition hover:bg-white/10">Completar</button>
+            </div>
+          `;
+        }
+
+        if (column === 'in_progress') {
+          return `
+            <div class="mt-3 flex flex-wrap gap-2 text-xs">
+              <button type="button" data-action="move-backlog" data-task-id="${escapeHtml(id)}" class="rounded-full bg-white/5 px-3 py-1 text-slate-300 transition hover:bg-white/10">Volver</button>
+              <button type="button" data-action="move-done" data-task-id="${escapeHtml(id)}" class="rounded-full bg-emerald-500 px-3 py-1 font-semibold text-white transition hover:bg-emerald-400">Completar</button>
+            </div>
+          `;
+        }
+
+        return `
+          <div class="mt-3 flex flex-wrap gap-2 text-xs">
+            <button type="button" data-action="move-backlog" data-task-id="${escapeHtml(id)}" class="rounded-full bg-white/5 px-3 py-1 text-slate-300 transition hover:bg-white/10">Reabrir</button>
+          </div>
+        `;
       }
 
       function renderCard(task, column, index) {
         const id = taskId(task);
-        const meta = CATEGORY_META[task.category] || CATEGORY_META.personal_space;
+        const meta = topicMeta(task.topic);
         const positionLabel = column === 'backlog' ? `Pendiente #${index + 1}` : (column === 'in_progress' ? 'En progreso' : 'Completada');
         return `
-          <article data-task-id="${escapeHtml(id)}" class="rounded-2xl border ${meta.border} bg-gradient-to-br from-slate-900/90 via-slate-900/75 to-slate-800/65 p-3 shadow-lg">
+          <article data-task-id="${escapeHtml(id)}" class="task-card cursor-grab select-none rounded-2xl border ${meta.border} bg-gradient-to-br from-slate-900/90 via-slate-900/75 to-slate-800/65 p-3 shadow-lg hover:border-cyan-300/40 active:cursor-grabbing">
             <div class="flex items-start gap-3">
-              <button type="button" class="drag-handle mt-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-300 transition hover:bg-white/10" aria-label="Drag task">::</button>
+              <span class="mt-1 inline-flex items-center gap-1 rounded-lg border border-cyan-300/20 bg-cyan-300/10 px-2 py-1 text-[11px] font-medium text-cyan-100">
+                <span aria-hidden="true">⋮⋮</span>
+                <span>Arrastrar</span>
+              </span>
               <div class="min-w-0 flex-1">
                 <div class="flex items-start justify-between gap-3">
                   <div class="min-w-0">
@@ -436,28 +553,7 @@
                   <span class="rounded-full bg-black/20 px-3 py-1">${task.estimated_minutes} min</span>
                   <span class="rounded-full bg-black/20 px-3 py-1">${escapeHtml(task.energy_level)} energía</span>
                 </div>
-                <details class="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3">
-                  <summary class="cursor-pointer text-sm font-medium text-cyan-200 outline-none">Ver detalles</summary>
-                  <div class="mt-3 space-y-3">
-                    <div class="rounded-2xl bg-white/5 p-3">
-                      <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Detalles</p>
-                      <p class="mt-1 text-sm leading-6 text-slate-200">${escapeHtml(task.details)}</p>
-                    </div>
-                    <div class="mt-3 rounded-2xl bg-cyan-400/10 p-3">
-                      <p class="text-[11px] uppercase tracking-[0.18em] text-cyan-100">Primer Paso</p>
-                      <p class="mt-1 text-sm text-slate-100">${escapeHtml(task.first_move)}</p>
-                    </div>
-                    <div class="mt-3 rounded-2xl bg-white/5 p-3">
-                      <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">Motivo</p>
-                      <p class="mt-1 text-sm text-slate-200">${escapeHtml(task.reason)}</p>
-                    </div>
-                    <div class="mt-4 flex flex-wrap gap-2 text-xs">
-                      <button type="button" data-action="move-backlog" data-task-id="${escapeHtml(id)}" class="rounded-full px-3 py-1 transition ${statusButtonClasses(column === 'backlog')}">Volver a Pendientes</button>
-                      <button type="button" data-action="move-progress" data-task-id="${escapeHtml(id)}" class="rounded-full bg-teal-500 px-3 py-1 font-semibold text-white transition hover:bg-teal-400">Empezar</button>
-                      <button type="button" data-action="move-done" data-task-id="${escapeHtml(id)}" class="rounded-full px-3 py-1 transition ${statusButtonClasses(column === 'done')}">Completar</button>
-                    </div>
-                  </div>
-                </details>
+                ${renderStatusActions(id, column)}
               </div>
             </div>
           </article>
@@ -465,7 +561,7 @@
       }
 
       function renderEmptyState(column) {
-        return `<div class="rounded-2xl border border-dashed border-white/10 p-4 text-sm text-slate-500">${COLUMN_META[column].empty}</div>`;
+        return `<div data-empty-state="true" class="pointer-events-none rounded-2xl border border-dashed border-white/10 p-4 text-sm text-slate-500">${COLUMN_META[column].empty}</div>`;
       }
 
       function renderColumn(column, element) {
@@ -476,6 +572,35 @@
       function destroySortables() {
         sortables.forEach((sortable) => sortable.destroy());
         sortables = [];
+      }
+
+      function clearDropTargets() {
+        activeDropColumn = null;
+        document.querySelectorAll('[data-column-shell]').forEach((shell) => {
+          shell.classList.remove('is-drop-ready', 'is-drop-target');
+        });
+        document.querySelectorAll('.kanban-list').forEach((list) => {
+          list.classList.remove('is-drop-target');
+        });
+      }
+
+      function setDropTarget(column) {
+        activeDropColumn = column || null;
+        document.querySelectorAll('[data-column-shell]').forEach((shell) => {
+          const isTarget = shell.dataset.columnShell === activeDropColumn;
+          shell.classList.toggle('is-drop-target', isTarget);
+        });
+        document.querySelectorAll('.kanban-list').forEach((list) => {
+          const isTarget = list.dataset.column === activeDropColumn;
+          list.classList.toggle('is-drop-target', isTarget);
+        });
+      }
+
+      function beginDragFeedback() {
+        document.querySelectorAll('[data-empty-state]').forEach((node) => node.remove());
+        document.querySelectorAll('[data-column-shell]').forEach((shell) => {
+          shell.classList.add('is-drop-ready');
+        });
       }
 
       function domTaskIds(element) {
@@ -552,12 +677,30 @@
             Sortable.create(element, {
               group: 'chaos-board',
               animation: 170,
-              handle: '.drag-handle',
-              draggable: '[data-task-id]',
-              fallbackOnBody: true,
-              ghostClass: 'opacity-40',
-              chosenClass: 'ring-2 ring-cyan-300/50',
-              onEnd: handleSortEnd
+              draggable: '.task-card',
+              delayOnTouchOnly: true,
+              delay: 80,
+              emptyInsertThreshold: 28,
+              setData(dataTransfer, dragEl) {
+                dataTransfer.setData('text/plain', dragEl.dataset.taskId || '');
+              },
+              filter: 'button,[data-no-drag]',
+              preventOnFilter: false,
+              ghostClass: 'sortable-ghost',
+              chosenClass: 'sortable-chosen',
+              dragClass: 'sortable-drag',
+              onStart(evt) {
+                beginDragFeedback();
+                setDropTarget(evt.from?.dataset.column || null);
+              },
+              onMove(evt) {
+                setDropTarget(evt.to?.dataset.column || evt.from?.dataset.column || null);
+                return true;
+              },
+              onEnd(evt) {
+                clearDropTargets();
+                handleSortEnd(evt);
+              }
             })
           );
         });
@@ -590,8 +733,8 @@
         renderColumn('in_progress', progressList);
         renderColumn('done', doneList);
         boardHint.textContent = currentFilter === 'all'
-          ? 'Tip: arrastra en Pendientes para definir el orden real de ejecución.'
-          : `Filtro activo: ${CATEGORY_META[currentFilter]?.label || currentFilter}. Arrastrar sigue actualizando la vista filtrada.`;
+          ? 'Tip: arrastra la tarjeta completa para definir el orden real de ejecución.'
+          : `Filtro activo: ${currentFilter}. Arrastrar sigue actualizando la vista filtrada.`;
         attachCardActions();
         initSortables();
       }

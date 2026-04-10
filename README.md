@@ -22,19 +22,20 @@ The app is built around two ideas:
 - AI helps create structure
 - you stay in control of execution
 
-That is why the generated plan always starts with every task in `Backlog`. Nothing is auto-marked as `In Progress` or `Done`.
+That is why the generated plan always starts with every task in `Pendientes`. Nothing is auto-marked as `En Progreso` or `Completadas`.
 
 ## Core Features
 
-- Local AI triage using Ollama and `qwen3:8b`
+- Local AI triage using Ollama and `gemma4:e4b`
 - Comma-first task extraction for more predictable task boundaries
 - Strict JSON output contract for stable backend parsing
 - Human-friendly coach panel for the day plan
 - Draggable Kanban board with:
-  - `Backlog`
-  - `In Progress`
-  - `Done`
-- Topic filters by category
+  - `Pendientes`
+  - `En Progreso`
+  - `Completadas`
+- Quick mouse actions to move tasks between states without opening details
+- Topic filters generated dynamically by the AI for each plan
 - Persistent browser state per generated plan
 - Windows launcher scripts for one-click startup
 
@@ -52,7 +53,7 @@ High-level flow:
    to the local Ollama model.
 6. The model returns structured JSON.
 7. The backend normalizes, validates, and repairs the response if needed.
-8. The frontend renders a summary strip, coach plan, topic filters, and a draggable board.
+8. The frontend renders a coach plan, dynamic topic filters, and a draggable board.
 
 ## Task Extraction Rules
 
@@ -70,20 +71,18 @@ Examples:
 
 The splitter is intentionally conservative. It tries to make tasks more detailed without turning every sentence into fragments.
 
-## Categories
+## Topics Instead of Fixed Categories
 
-Tasks are classified into one of these categories:
+PANGU no longer relies on a fixed taxonomy like business, university, personal, or consumption.
 
-- `kinetiq_business`
-- `university`
-- `personal_space`
-- `consumption`
+Instead:
 
-Important rule:
+- the AI generates short topics dynamically for each plan
+- every task receives one main `topic`
+- the filter bar is built from those discovered topics
+- topics change depending on the actual brain dump
 
-- `kinetiq_business` is only valid when work/business/Kinetiq/coding/deploy/testing/product context is explicitly mentioned.
-
-The backend also includes a safeguard that remaps false-positive business tasks into a better category.
+This makes the board more flexible and more faithful to what the user actually wrote.
 
 ## Tech Stack
 
@@ -91,7 +90,7 @@ The backend also includes a safeguard that remaps false-positive business tasks 
 - FastAPI
 - Uvicorn
 - Ollama Python library
-- Qwen via local Ollama
+- Gemma via local Ollama
 - Tailwind CSS via CDN
 - SortableJS via CDN
 
@@ -120,12 +119,12 @@ Before running the app, install:
 
 - Windows Python 3.12 or newer
 - [Ollama](https://ollama.com/)
-- the local model `qwen3:8b`
+- the local model `gemma4:e4b`
 
 Pull the model:
 
 ```bash
-ollama pull qwen3:8b
+ollama pull gemma4:e4b
 ```
 
 ## Running the App
@@ -143,6 +142,7 @@ That launcher will:
 - locate Windows Python
 - install Python dependencies if needed
 - start Ollama if needed
+- verify that the selected model is installed
 - warm the selected model
 - start FastAPI on `127.0.0.1:8000`
 - open the browser automatically
@@ -172,14 +172,16 @@ http://127.0.0.1:8000
 Optional environment variables:
 
 - `OLLAMA_MODEL`
-  - default: `qwen3:8b`
+  - default: `gemma4:e4b`
+- `CHAOS_TRIAGE_MODEL`
+  - Windows launcher override for the startup script
 - `OLLAMA_HOST`
   - default: `http://127.0.0.1:11434`
 
 Example:
 
 ```bash
-set OLLAMA_MODEL=qwen3:8b
+set OLLAMA_MODEL=gemma4:e4b
 uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
@@ -207,6 +209,7 @@ Returns:
 
 - `summary`
 - `coach`
+- `topics`
 - `tasks`
 - `meta`
 
@@ -249,6 +252,12 @@ That file covers:
 - drag/drop behavior
 - local persistence
 - Windows launcher behavior
+
+If the launcher says the model is missing, install it with:
+
+```bash
+ollama pull gemma4:e4b
+```
 
 ## Recommended Public Repo Contents
 

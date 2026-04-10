@@ -19,76 +19,9 @@ from pydantic import BaseModel
 app = FastAPI(title="Chaos-Triage", version="1.0.0")
 BASE_DIR = Path(__file__).resolve().parent
 
-MODEL_NAME = os.getenv("OLLAMA_MODEL", "qwen3:8b").strip()
-ALLOWED_CATEGORIES = {
-    "kinetiq_business",
-    "university",
-    "personal_space",
-    "consumption",
-}
+MODEL_NAME = os.getenv("OLLAMA_MODEL", "gemma4:e4b").strip()
 ALLOWED_URGENCY = {"low", "medium", "high"}
 ALLOWED_ENERGY = {"light", "medium", "deep"}
-BUSINESS_KEYWORDS = (
-    "kinetiq",
-    "business",
-    "work",
-    "coding",
-    "code",
-    "deploy",
-    "deployment",
-    "test",
-    "testing",
-    "product",
-    "agent",
-    "spec",
-    "release",
-    "staging",
-    "production",
-)
-UNIVERSITY_KEYWORDS = (
-    "university",
-    "lecture",
-    "lectures",
-    "class",
-    "classes",
-    "assignment",
-    "assignments",
-    "study",
-    "studying",
-    "exam",
-    "homework",
-    "campus",
-    "catch up",
-)
-PERSONAL_SPACE_KEYWORDS = (
-    "clean",
-    "cleaning",
-    "room",
-    "hamster",
-    "cage",
-    "chore",
-    "chores",
-    "laundry",
-    "kitchen",
-    "desk",
-    "tidy",
-    "errand",
-)
-CONSUMPTION_KEYWORDS = (
-    "watch",
-    "video",
-    "videos",
-    "youtube",
-    "read",
-    "post",
-    "posts",
-    "scroll",
-    "scrolling",
-    "content",
-    "reddit",
-    "twitter",
-    "tiktok",
-)
 
 SYSTEM_PROMPT = """
 You are Chaos-Triage Planner.
@@ -106,13 +39,14 @@ Required JSON schema:
     "caution": "one pacing warning or anti-distraction note",
     "steps": ["short step 1", "short step 2", "short step 3"]
   },
+  "topics": ["short theme 1", "short theme 2"],
   "tasks": [
     {
       "step_number": 1,
       "title": "short actionable task",
       "details": "1-2 lines with concrete next action",
       "first_move": "very short first physical or digital action",
-      "category": "kinetiq_business|university|personal_space|consumption",
+      "topic": "short readable theme",
       "urgency": "low|medium|high",
       "energy_level": "light|medium|deep",
       "estimated_minutes": 25,
@@ -127,21 +61,16 @@ Task extraction and categorization rules:
 - Only split obvious internal chains such as "deploy then test", "clean room and wash dishes", or "estudiar y entregar".
 - Do not aggressively split descriptive phrases that are really one task.
 - Keep each task medium-detail: concise title, short explanation, and one clear first_move.
-- Use kinetiq_business only when the user explicitly mentions work/business/Kinetiq/coding/deployment/testing/product/spec/agent tasks.
-- Do not invent business context if the user did not clearly mention it.
-- kinetiq_business: development, coding, testing, deployment, product specs, agent configurations.
-- university: lectures, catching up, assignments, studying.
-- personal_space: cleaning room, cleaning hamster cage, physical chores.
-- consumption: watching videos, reading posts, scrolling.
+- Generate topics freely from the actual brain dump.
+- Each task must have exactly one short topic in the topic field.
+- Topics must be readable, useful as filters, and grounded in the user's text.
+- Avoid duplicate topics or tiny wording variations for the same theme.
+- topics must list the unique topics used across tasks.
 
 Ordering rules (critical):
-1) Warm-up first: quick physical tasks from personal_space to build momentum.
-2) Hard blockers second: urgent university tasks or critical code tasks.
-3) Deep work third: remaining meaningful business/university tasks.
-4) Reward last: consumption tasks.
-
-Hard rule inside code-related tasks:
-- If deployment and testing are both present, deployment MUST come before testing.
+- Put the tasks in a practical execution order based on blockers, effort, momentum, and usefulness.
+- Front-load clear wins or unblockers when appropriate.
+- Keep the suggested order realistic for one day.
 
 Output constraints:
 - Include all meaningful tasks inferred from user text.
@@ -152,6 +81,7 @@ Output constraints:
 - first_move must be short, practical, and easy to start right now.
 - coach must sound like a helpful daily guide in mixed Spanish and English.
 - coach.steps must contain exactly 3 short lines.
+- topic values should usually be 1-3 words.
 - If nothing actionable exists, return one low-urgency task asking user to clarify priorities.
 """.strip()
 
@@ -177,6 +107,7 @@ TRIAGE_SCHEMA = {
             },
             "required": ["intro", "focus", "caution", "steps"],
         },
+        "topics": {"type": "array", "items": {"type": "string"}},
         "tasks": {
             "type": "array",
             "items": {
@@ -186,7 +117,7 @@ TRIAGE_SCHEMA = {
                     "title": {"type": "string"},
                     "details": {"type": "string"},
                     "first_move": {"type": "string"},
-                    "category": {"type": "string", "enum": sorted(ALLOWED_CATEGORIES)},
+                    "topic": {"type": "string"},
                     "urgency": {"type": "string", "enum": sorted(ALLOWED_URGENCY)},
                     "energy_level": {"type": "string", "enum": sorted(ALLOWED_ENERGY)},
                     "estimated_minutes": {"type": "integer"},
@@ -197,7 +128,7 @@ TRIAGE_SCHEMA = {
                     "title",
                     "details",
                     "first_move",
-                    "category",
+                    "topic",
                     "urgency",
                     "energy_level",
                     "estimated_minutes",
@@ -206,7 +137,7 @@ TRIAGE_SCHEMA = {
             },
         },
     },
-    "required": ["summary", "coach", "tasks"],
+    "required": ["summary", "coach", "topics", "tasks"],
 }
 
 
@@ -222,7 +153,7 @@ class TriageTask(BaseModel):
     title: str
     details: str
     first_move: str
-    category: str
+    topic: str
     urgency: str
     energy_level: str
     estimated_minutes: int
@@ -233,6 +164,7 @@ class TriageTask(BaseModel):
 class TriageResponse(BaseModel):
     summary: str
     coach: TriageCoach
+    topics: list[str]
     tasks: list[TriageTask]
     meta: dict[str, Any]
 
@@ -401,46 +333,51 @@ def _extract_first_json_object(raw: str) -> dict[str, Any]:
 
 
 def _lane_for_task(task: dict[str, Any], index: int, total: int) -> str:
-    category = task["category"]
     if index == 0:
         return "suggested"
-    if category == "consumption":
-        return "done_later"
-    if index <= 2 or task["urgency"] == "high":
+    if task["urgency"] == "high":
         return "suggested"
-    if index == total - 1:
+    if total > 1 and index >= total - 2 and task["urgency"] == "low":
         return "done_later"
     return "suggested"
 
+def _normalize_topic(raw_topic: Any) -> str:
+    text = str(raw_topic or "").strip()
+    if not text:
+        return "General"
+    text = re.sub(r"\s+", " ", text)
+    text = text.strip(" \n\t.;:-_")
+    if not text:
+        return "General"
+    return text[:48]
 
-def _contains_keyword(text: str, keywords: tuple[str, ...]) -> bool:
-    lowered = text.lower()
-    return any(keyword in lowered for keyword in keywords)
 
+def _collect_topics(tasks: list[dict[str, Any]], raw_topics: Any) -> list[str]:
+    topics: list[str] = []
+    seen: set[str] = set()
 
-def _remap_category_if_needed(category: str, task_text: str, original_text: str) -> str:
-    if category != "kinetiq_business":
-        return category
+    if isinstance(raw_topics, list):
+        for topic in raw_topics:
+            normalized = _normalize_topic(topic)
+            key = normalized.casefold()
+            if key not in seen:
+                seen.add(key)
+                topics.append(normalized)
 
-    if _contains_keyword(original_text, BUSINESS_KEYWORDS):
-        return category
+    for task in tasks:
+        normalized = _normalize_topic(task.get("topic"))
+        key = normalized.casefold()
+        if key not in seen:
+            seen.add(key)
+            topics.append(normalized)
 
-    combined = f"{task_text} {original_text}".lower()
-    if _contains_keyword(combined, UNIVERSITY_KEYWORDS):
-        return "university"
-    if _contains_keyword(combined, PERSONAL_SPACE_KEYWORDS):
-        return "personal_space"
-    if _contains_keyword(combined, CONSUMPTION_KEYWORDS):
-        return "consumption"
-    return "personal_space"
+    return topics or ["General"]
 
 
 def _build_default_coach(tasks: list[dict[str, Any]]) -> dict[str, Any]:
-    meaningful = [task for task in tasks if task["category"] != "consumption"] or tasks
-    first = meaningful[0]
-    second = meaningful[1] if len(meaningful) > 1 else None
-    third = meaningful[2] if len(meaningful) > 2 else None
-    reward = next((task for task in tasks if task["category"] == "consumption"), None)
+    first = tasks[0]
+    second = tasks[1] if len(tasks) > 1 else None
+    third = tasks[2] if len(tasks) > 2 else None
 
     steps = [
         f"Primero, start con {first['title']} y no mires mas lejos que el primer movimiento.",
@@ -456,16 +393,10 @@ def _build_default_coach(tasks: list[dict[str, Any]]) -> dict[str, Any]:
         ),
     ]
 
-    caution = (
-        "Cuidado con abrir contenido de reward demasiado pronto; primero cierra dos bloques serios."
-        if reward
-        else "Cuidado con saltar entre tareas; hoy te conviene trabajar por bloques y no por impulsos."
-    )
-
     return {
         "intro": "Hoy no tienes que resolver toda la vida; solo necesitas una secuencia clara para bajar el caos.",
         "focus": f"Empieza por {first['title']} y usa este arranque: {first['first_move']}.",
-        "caution": caution,
+        "caution": "Cuidado con saltar entre tareas; hoy te conviene trabajar por bloques y no por impulsos.",
         "steps": steps,
     }
 
@@ -517,18 +448,7 @@ def _coerce_and_validate(data: dict[str, Any], original_text: str) -> dict[str, 
             str(task.get("first_move") or task.get("next_action") or title).strip()[:160]
             or title
         )
-        task_text = " ".join(
-            [
-                title,
-                details,
-                first_move,
-                str(task.get("reason", "")),
-            ]
-        )
-
-        category = _remap_category_if_needed(str(task.get("category", "")).strip(), task_text, original_text)
-        if category not in ALLOWED_CATEGORIES:
-            continue
+        topic = _normalize_topic(task.get("topic") or task.get("category") or task.get("theme"))
 
         urgency = str(task.get("urgency", "medium")).strip().lower()
         if urgency not in ALLOWED_URGENCY:
@@ -536,7 +456,7 @@ def _coerce_and_validate(data: dict[str, Any], original_text: str) -> dict[str, 
 
         energy_level = str(task.get("energy_level", "medium")).strip().lower()
         if energy_level not in ALLOWED_ENERGY:
-            energy_level = "light" if category == "personal_space" else "medium"
+            energy_level = "medium"
 
         try:
             estimated = int(task.get("estimated_minutes", 25))
@@ -550,7 +470,7 @@ def _coerce_and_validate(data: dict[str, Any], original_text: str) -> dict[str, 
                 "title": title,
                 "details": details,
                 "first_move": first_move,
-                "category": category,
+                "topic": topic,
                 "urgency": urgency,
                 "energy_level": energy_level,
                 "estimated_minutes": estimated,
@@ -562,7 +482,7 @@ def _coerce_and_validate(data: dict[str, Any], original_text: str) -> dict[str, 
     if not cleaned_tasks:
         raise ValueError("No valid tasks after normalization")
 
-    cleaned_tasks.sort(key=lambda t: (t["step_number"], t["category"], t["title"]))
+    cleaned_tasks.sort(key=lambda t: (t["step_number"], t["topic"].casefold(), t["title"].casefold()))
     for idx, task in enumerate(cleaned_tasks, start=1):
         task["step_number"] = idx
         task["lane"] = _lane_for_task(task, idx - 1, len(cleaned_tasks))
@@ -570,6 +490,7 @@ def _coerce_and_validate(data: dict[str, Any], original_text: str) -> dict[str, 
     return {
         "summary": summary,
         "coach": _normalize_coach(data.get("coach"), cleaned_tasks),
+        "topics": _collect_topics(cleaned_tasks, data.get("topics")),
         "tasks": cleaned_tasks,
         "meta": {
             "model": MODEL_NAME,

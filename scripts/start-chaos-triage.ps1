@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectWin = Split-Path -Parent $ScriptDir
-$Model = if ($env:CHAOS_TRIAGE_MODEL) { $env:CHAOS_TRIAGE_MODEL.Trim() } else { "qwen3:8b" }
+$Model = if ($env:CHAOS_TRIAGE_MODEL) { $env:CHAOS_TRIAGE_MODEL.Trim() } else { "gemma4:e4b" }
 $OllamaExe = Join-Path $env:LOCALAPPDATA "Programs\Ollama\ollama.exe"
 $RequirementsPath = Join-Path $ProjectWin "requirements.txt"
 $InstallStamp = Join-Path $ProjectWin ".windows-python-requirements-installed"
@@ -86,6 +86,23 @@ function Ensure-WindowsPythonDeps {
   }
 }
 
+function Ensure-OllamaModelAvailable {
+  param(
+    [string]$ModelName
+  )
+
+  $Tags = Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags" -TimeoutSec 10
+  $InstalledModels = @()
+
+  if ($null -ne $Tags.models) {
+    $InstalledModels = $Tags.models | ForEach-Object { $_.name }
+  }
+
+  if ($InstalledModels -notcontains $ModelName) {
+    throw "El modelo '$ModelName' no está disponible en Ollama. Ejecuta: ollama pull $ModelName"
+  }
+}
+
 function Stop-PreviousServer {
   $Matches = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
     $_.Name -eq "python.exe" -and $_.CommandLine -like "*-m uvicorn main:app*--port 8000*"
@@ -123,6 +140,8 @@ if (-not (Get-Process -Name ollama -ErrorAction SilentlyContinue)) {
 if (-not (Wait-Http -Url "http://127.0.0.1:11434/api/tags")) {
   throw "Ollama did not become ready on http://127.0.0.1:11434"
 }
+
+Ensure-OllamaModelAvailable -ModelName $Model
 
 $WarmPayload = @{
   model = $Model
