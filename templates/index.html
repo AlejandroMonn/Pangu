@@ -181,6 +181,32 @@
             </div>
           </div>
 
+          <div class="mb-6 rounded-2xl border border-cyan-300/20 bg-gradient-to-br from-cyan-400/10 via-slate-900/55 to-slate-900/70 p-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 class="text-sm font-semibold text-white">Captura Rápida</h3>
+                <p class="mt-1 text-xs text-slate-400">Cuando aparezca una tarea nueva durante el día, escríbela aquí y agrégala al tablero sin volver a correr todo el plan.</p>
+              </div>
+              <span class="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-[11px] text-cyan-100">Se guarda localmente</span>
+            </div>
+            <div class="mt-4 flex flex-col gap-3 lg:flex-row">
+              <input
+                id="quickTaskInput"
+                type="text"
+                placeholder="Ejemplo: responder correo de Laura, pagar recibo, revisar dashboard"
+                class="min-w-0 flex-1 rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 placeholder-slate-500 outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
+              />
+              <button
+                id="quickAddBtn"
+                type="button"
+                class="inline-flex items-center justify-center rounded-2xl bg-cyan-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 active:scale-[0.99]"
+              >
+                Agregar al tablero
+              </button>
+            </div>
+            <p id="quickAddMsg" class="mt-3 hidden rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-100"></p>
+          </div>
+
           <div class="mb-6 rounded-2xl border border-white/10 bg-slate-900/45 p-4">
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -265,6 +291,11 @@
       const backlogList = document.getElementById('backlogList');
       const progressList = document.getElementById('progressList');
       const doneList = document.getElementById('doneList');
+      const quickTaskInput = document.getElementById('quickTaskInput');
+      const quickAddBtn = document.getElementById('quickAddBtn');
+      const quickAddMsg = document.getElementById('quickAddMsg');
+
+      const WORKSPACE_STORAGE_KEY = 'chaos-triage:workspace:v1';
 
       let currentPlan = null;
       let initialCoach = null;
@@ -275,6 +306,7 @@
       let hasInteracted = false;
       let sortables = [];
       let activeDropColumn = null;
+      let localTaskCounter = 0;
 
       function setLoading(isLoading) {
         organizeBtn.disabled = isLoading;
@@ -292,6 +324,20 @@
         errorMsg.textContent = '';
       }
 
+      function setQuickMessage(message, tone = 'success') {
+        const toneClasses = tone === 'error'
+          ? 'border-rose-400/20 bg-rose-400/10 text-rose-100'
+          : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100';
+        quickAddMsg.className = `mt-3 rounded-xl border px-3 py-2 text-xs ${toneClasses}`;
+        quickAddMsg.textContent = message;
+        quickAddMsg.classList.remove('hidden');
+      }
+
+      function clearQuickMessage() {
+        quickAddMsg.classList.add('hidden');
+        quickAddMsg.textContent = '';
+      }
+
       function escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
@@ -299,7 +345,7 @@
       }
 
       function taskId(task) {
-        return `${task.step_number}-${task.title}`;
+        return String(task.task_id || task.client_id || `${task.step_number}-${task.title}`);
       }
 
       function planKey(tasks) {
@@ -312,6 +358,69 @@
 
       function setTaskMap(tasks) {
         taskMap = new Map(tasks.map((task) => [taskId(task), task]));
+      }
+
+      function nextLocalTaskId() {
+        localTaskCounter += 1;
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+          return `local-${window.crypto.randomUUID()}`;
+        }
+        return `local-${Date.now()}-${localTaskCounter}`;
+      }
+
+      function normalizeTopicText(topic) {
+        const text = String(topic || '').trim();
+        return text || 'Nuevas ideas';
+      }
+
+      function uniqueTopics(topics) {
+        const seen = new Set();
+        return topics.filter((topic) => {
+          const normalized = normalizeTopicText(topic);
+          const key = normalized.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }).map((topic) => normalizeTopicText(topic));
+      }
+
+      function hydrateTask(task, index) {
+        return {
+          ...task,
+          task_id: task.task_id || null,
+          client_id: task.client_id || task.task_id || nextLocalTaskId(),
+          step_number: Number(task.step_number) || (index + 1),
+          title: String(task.title || '').trim() || `Tarea ${index + 1}`,
+          details: String(task.details || task.title || '').trim() || 'Siguiente paso pendiente.',
+          first_move: String(task.first_move || task.title || '').trim() || 'Abrir la tarea y empezar.',
+          topic: normalizeTopicText(task.topic),
+          urgency: String(task.urgency || 'medium').trim().toLowerCase() || 'medium',
+          energy_level: String(task.energy_level || 'medium').trim().toLowerCase() || 'medium',
+          estimated_minutes: Math.max(5, Number(task.estimated_minutes) || 20),
+          reason: String(task.reason || 'Añadida al plan actual.').trim() || 'Añadida al plan actual.',
+          lane: String(task.lane || 'suggested')
+        };
+      }
+
+      function hydratePlan(data) {
+        const rawTasks = Array.isArray(data?.tasks) ? data.tasks : [];
+        const tasks = rawTasks.map((task, index) => hydrateTask(task, index));
+        return {
+          summary: data?.summary || 'Tu tablero sigue vivo localmente para que no pierdas el hilo del día.',
+          coach: data?.coach || {
+            intro: 'Tu plan sigue aquí.',
+            focus: 'Retoma una sola tarea visible antes de abrir más frentes.',
+            caution: 'Evita reescribir todo si solo apareció una tarea nueva.',
+            steps: [
+              '1. Mira Pendientes.',
+              '2. Agrega lo nuevo si apareció algo.',
+              '3. Sigue con un solo bloque.'
+            ]
+          },
+          topics: uniqueTopics(Array.isArray(data?.topics) ? data.topics : tasks.map((task) => task.topic)),
+          tasks,
+          meta: data?.meta || { model: 'local', transport: 'workspace_restore' }
+        };
       }
 
       function hashTopic(topic) {
@@ -407,9 +516,75 @@
       }
 
       function persistState() {
+        if (!currentPlan) return;
         localStorage.setItem(storageKey('columns'), JSON.stringify(boardState));
         localStorage.setItem(storageKey('status'), JSON.stringify(taskStatus));
         localStorage.setItem(storageKey('filter'), currentFilter);
+        persistWorkspace();
+      }
+
+      function persistWorkspace() {
+        if (!currentPlan) return;
+        const snapshot = {
+          currentPlan,
+          initialCoach,
+          boardState,
+          currentFilter,
+          hasInteracted,
+          brainDump: brainDump.value || ''
+        };
+        localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(snapshot));
+      }
+
+      function restoreWorkspace() {
+        const raw = localStorage.getItem(WORKSPACE_STORAGE_KEY);
+        if (!raw) return false;
+
+        try {
+          const snapshot = JSON.parse(raw);
+          const hydratedPlan = hydratePlan(snapshot.currentPlan || {});
+          if (!hydratedPlan.tasks.length) return false;
+
+          currentPlan = hydratedPlan;
+          initialCoach = snapshot.initialCoach || hydratedPlan.coach || null;
+          setTaskMap(hydratedPlan.tasks);
+
+          const ids = hydratedPlan.tasks.map((task) => taskId(task));
+          const nextBoard = { backlog: [], in_progress: [], done: [] };
+          const storedBoard = snapshot.boardState || {};
+          const seen = new Set();
+
+          ['backlog', 'in_progress', 'done'].forEach((column) => {
+            const values = Array.isArray(storedBoard[column]) ? storedBoard[column] : [];
+            values.forEach((id) => {
+              if (ids.includes(id) && !seen.has(id)) {
+                nextBoard[column].push(id);
+                seen.add(id);
+              }
+            });
+          });
+
+          ids.forEach((id) => {
+            if (!seen.has(id)) nextBoard.backlog.push(id);
+          });
+
+          boardState = nextBoard;
+          deriveStatusFromColumns();
+          currentFilter = snapshot.currentFilter || 'all';
+          hasInteracted = Boolean(snapshot.hasInteracted);
+          brainDump.value = snapshot.brainDump || '';
+          summaryText.textContent = hydratedPlan.summary || 'Plan recuperado localmente.';
+          modelTag.textContent = hydratedPlan.meta?.transport
+            ? `Modelo: ${hydratedPlan.meta.model} vía ${hydratedPlan.meta.transport}`
+            : `Modelo: ${hydratedPlan.meta?.model || 'local'}`;
+          renderPlan();
+          resultsSection.classList.remove('hidden');
+          return true;
+        } catch (error) {
+          console.error('No se pudo restaurar el workspace:', error);
+          localStorage.removeItem(WORKSPACE_STORAGE_KEY);
+          return false;
+        }
       }
 
       function taskMatchesFilterId(id) {
@@ -510,6 +685,7 @@
             <div class="mt-3 flex flex-wrap gap-2 text-xs">
               <button type="button" data-action="move-progress" data-task-id="${escapeHtml(id)}" class="rounded-full bg-teal-500 px-3 py-1 font-semibold text-white transition hover:bg-teal-400">Empezar</button>
               <button type="button" data-action="move-done" data-task-id="${escapeHtml(id)}" class="rounded-full bg-white/5 px-3 py-1 text-slate-300 transition hover:bg-white/10">Completar</button>
+              <button type="button" data-action="delete-task" data-task-id="${escapeHtml(id)}" class="rounded-full bg-rose-500/15 px-3 py-1 text-rose-200 transition hover:bg-rose-500/25">Eliminar</button>
             </div>
           `;
         }
@@ -519,6 +695,7 @@
             <div class="mt-3 flex flex-wrap gap-2 text-xs">
               <button type="button" data-action="move-backlog" data-task-id="${escapeHtml(id)}" class="rounded-full bg-white/5 px-3 py-1 text-slate-300 transition hover:bg-white/10">Volver</button>
               <button type="button" data-action="move-done" data-task-id="${escapeHtml(id)}" class="rounded-full bg-emerald-500 px-3 py-1 font-semibold text-white transition hover:bg-emerald-400">Completar</button>
+              <button type="button" data-action="delete-task" data-task-id="${escapeHtml(id)}" class="rounded-full bg-rose-500/15 px-3 py-1 text-rose-200 transition hover:bg-rose-500/25">Eliminar</button>
             </div>
           `;
         }
@@ -526,6 +703,7 @@
         return `
           <div class="mt-3 flex flex-wrap gap-2 text-xs">
             <button type="button" data-action="move-backlog" data-task-id="${escapeHtml(id)}" class="rounded-full bg-white/5 px-3 py-1 text-slate-300 transition hover:bg-white/10">Reabrir</button>
+            <button type="button" data-action="delete-task" data-task-id="${escapeHtml(id)}" class="rounded-full bg-rose-500/15 px-3 py-1 text-rose-200 transition hover:bg-rose-500/25">Eliminar</button>
           </div>
         `;
       }
@@ -649,6 +827,51 @@
         renderPlan();
       }
 
+      function deleteTask(id) {
+        if (!currentPlan) return;
+
+        const task = taskMap.get(id);
+        const label = task?.title || 'esta tarea';
+        const confirmed = window.confirm(`¿Eliminar "${label}" del tablero?`);
+        if (!confirmed) return;
+
+        currentPlan.tasks = currentPlan.tasks.filter((item) => taskId(item) !== id);
+        currentPlan.topics = uniqueTopics(currentPlan.tasks.map((item) => item.topic));
+        setTaskMap(currentPlan.tasks);
+
+        Object.keys(boardState).forEach((column) => {
+          boardState[column] = boardState[column].filter((taskKey) => taskKey !== id);
+        });
+
+        deriveStatusFromColumns();
+        hasInteracted = true;
+
+        if (currentFilter !== 'all' && !currentPlan.topics.includes(currentFilter)) {
+          currentFilter = 'all';
+        }
+
+        if (!currentPlan.tasks.length) {
+          currentPlan.summary = 'No tienes tareas activas ahora mismo. Puedes agregar una nueva en Captura Rápida cuando aparezca.';
+          currentPlan.topics = [];
+          initialCoach = {
+            intro: 'Tablero en cero.',
+            focus: 'Si aparece algo nuevo, captúralo arriba y vuelve a arrancar desde una sola tarea.',
+            caution: 'No hace falta rellenar el día a la fuerza si ya limpiaste el tablero.',
+            steps: [
+              '1. Revisa si de verdad queda algo pendiente.',
+              '2. Agrega solo lo nuevo que aparezca.',
+              '3. Empieza otra vez con una sola tarea.'
+            ]
+          };
+          boardState = { backlog: [], in_progress: [], done: [] };
+          summaryText.textContent = currentPlan.summary;
+        }
+
+        persistState();
+        renderPlan();
+        setQuickMessage(`"${label}" fue eliminada del tablero.`);
+      }
+
       function handleSortEnd(evt) {
         const source = evt.from.dataset.column;
         const target = evt.to.dataset.column;
@@ -723,6 +946,10 @@
             }
             if (action === 'move-done') {
               moveTaskToColumn(id, 'done');
+              return;
+            }
+            if (action === 'delete-task') {
+              deleteTask(id);
             }
           });
         });
@@ -747,14 +974,107 @@
       }
 
       function applyPlan(data) {
-        currentPlan = data;
-        initialCoach = data.coach || null;
-        setTaskMap(data.tasks);
-        loadPersistedState(data.tasks);
-        summaryText.textContent = data.summary || 'Plan generado.';
-        modelTag.textContent = data.meta?.transport ? `Modelo: ${data.meta.model} vía ${data.meta.transport}` : `Modelo: ${data.meta?.model || 'local'}`;
+        const hydratedPlan = hydratePlan(data);
+        currentPlan = hydratedPlan;
+        initialCoach = hydratedPlan.coach || null;
+        setTaskMap(hydratedPlan.tasks);
+        loadPersistedState(hydratedPlan.tasks);
+        summaryText.textContent = hydratedPlan.summary || 'Plan generado.';
+        modelTag.textContent = hydratedPlan.meta?.transport ? `Modelo: ${hydratedPlan.meta.model} vía ${hydratedPlan.meta.transport}` : `Modelo: ${hydratedPlan.meta?.model || 'local'}`;
+        persistWorkspace();
         renderPlan();
         resultsSection.classList.remove('hidden');
+      }
+
+      function ensureWorkspaceExists() {
+        if (currentPlan) return;
+        const emptyPlan = hydratePlan({
+          summary: 'Tu tablero local ya está listo para capturar tareas nuevas sin rehacer todo el plan.',
+          coach: {
+            intro: 'Tu día ya puede vivir aquí.',
+            focus: 'Agrega una tarea rápida y muévela al flujo cuando estés listo.',
+            caution: 'No necesitas reconstruir todo si solo apareció una idea nueva.',
+            steps: [
+              '1. Escribe la tarea nueva.',
+              '2. Agrégala al tablero.',
+              '3. Retoma un solo bloque.'
+            ]
+          },
+          topics: [],
+          tasks: [],
+          meta: { model: 'local', transport: 'captura_manual' }
+        });
+        currentPlan = emptyPlan;
+        initialCoach = emptyPlan.coach;
+        boardState = { backlog: [], in_progress: [], done: [] };
+        deriveStatusFromColumns();
+        currentFilter = 'all';
+        hasInteracted = true;
+        setTaskMap([]);
+        summaryText.textContent = emptyPlan.summary;
+        modelTag.textContent = 'Modelo: local vía captura_manual';
+        resultsSection.classList.remove('hidden');
+      }
+
+      function createManualTask(rawTitle, indexOffset, inferredTopic) {
+        const cleanTitle = String(rawTitle || '').trim().replace(/\s+/g, ' ');
+        const highestStep = currentPlan.tasks.reduce((max, task) => Math.max(max, Number(task.step_number) || 0), 0);
+        return hydrateTask({
+          client_id: nextLocalTaskId(),
+          step_number: highestStep + indexOffset + 1,
+          title: cleanTitle.charAt(0).toUpperCase() + cleanTitle.slice(1),
+          details: cleanTitle,
+          first_move: cleanTitle,
+          topic: inferredTopic,
+          urgency: 'medium',
+          energy_level: 'medium',
+          estimated_minutes: 20,
+          reason: 'Añadida manualmente durante el día.',
+          lane: 'suggested'
+        }, highestStep + indexOffset);
+      }
+
+      function addQuickTasks() {
+        const raw = quickTaskInput.value.trim();
+        if (!raw) {
+          setQuickMessage('Escribe al menos una tarea antes de agregarla.', 'error');
+          return;
+        }
+
+        ensureWorkspaceExists();
+        clearQuickMessage();
+
+        const entries = raw
+          .split(',')
+          .map((chunk) => chunk.trim())
+          .filter(Boolean);
+
+        if (!entries.length) {
+          setQuickMessage('No encontré una tarea válida para agregar.', 'error');
+          return;
+        }
+
+        const inferredTopic = currentFilter !== 'all'
+          ? currentFilter
+          : 'Nuevas ideas';
+
+        const newTasks = entries.map((entry, index) => createManualTask(entry, index, inferredTopic));
+        currentPlan.tasks = [...newTasks, ...currentPlan.tasks];
+        currentPlan.topics = uniqueTopics([...currentPlan.topics, ...newTasks.map((task) => task.topic)]);
+        setTaskMap(currentPlan.tasks);
+
+        const newIds = newTasks.map((task) => taskId(task));
+        boardState.backlog = dedupe([...newIds, ...boardState.backlog]);
+        deriveStatusFromColumns();
+        hasInteracted = true;
+        persistState();
+        renderPlan();
+
+        quickTaskInput.value = '';
+        setQuickMessage(entries.length === 1
+          ? 'Tarea agregada al tablero sin rerun del plan.'
+          : `${entries.length} tareas agregadas al tablero sin rerun del plan.`);
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
 
       async function runTriage() {
@@ -794,11 +1114,21 @@
       }
 
       organizeBtn.addEventListener('click', runTriage);
+      quickAddBtn.addEventListener('click', addQuickTasks);
+      quickTaskInput.addEventListener('input', clearQuickMessage);
+      quickTaskInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          addQuickTasks();
+        }
+      });
       brainDump.addEventListener('keydown', (event) => {
         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
           runTriage();
         }
       });
+
+      restoreWorkspace();
     </script>
   </body>
 </html>
