@@ -19,7 +19,7 @@ from pydantic import BaseModel
 app = FastAPI(title="Chaos-Triage", version="1.0.0")
 BASE_DIR = Path(__file__).resolve().parent
 
-MODEL_NAME = os.getenv("OLLAMA_MODEL", "gemma4:e4b").strip()
+MODEL_NAME = os.getenv("OLLAMA_MODEL", "qwen3:8b").strip()
 ALLOWED_URGENCY = {"low", "medium", "high"}
 ALLOWED_ENERGY = {"light", "medium", "deep"}
 
