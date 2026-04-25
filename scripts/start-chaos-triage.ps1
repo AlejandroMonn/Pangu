@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectWin = Split-Path -Parent $ScriptDir
-$Model = if ($env:CHAOS_TRIAGE_MODEL) { $env:CHAOS_TRIAGE_MODEL.Trim() } else { "qwen3:8b" }
+$Model = if ($env:CHAOS_TRIAGE_MODEL) { $env:CHAOS_TRIAGE_MODEL.Trim() } else { "qwen3.5:9b" }
 $OllamaExe = Join-Path $env:LOCALAPPDATA "Programs\Ollama\ollama.exe"
 $RequirementsPath = Join-Path $ProjectWin "requirements.txt"
 $InstallStamp = Join-Path $ProjectWin ".windows-python-requirements-installed"
