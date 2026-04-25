@@ -527,7 +527,7 @@ def _chat_via_windows_ollama(system_prompt: str, user_text: str, fmt: dict[str, 
     ps_script = f"""
 $OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $payload = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('{payload_b64}'))
-$response = Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/chat' -Method Post -ContentType 'application/json' -Body $payload -TimeoutSec 180
+$response = Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/chat' -Method Post -ContentType 'application/json' -Body $payload -TimeoutSec 3600
 if ($null -eq $response.message -or [string]::IsNullOrWhiteSpace($response.message.content)) {{
   throw 'Windows Ollama returned no content'
 }}
@@ -540,7 +540,7 @@ $response.message.content
         text=True,
         encoding="utf-8",
         errors="replace",
-        timeout=220,
+        timeout=3650,
         check=False,
     )
     if result.returncode != 0:
@@ -554,29 +554,40 @@ $response.message.content
 
 
 def _repair_content(raw_content: str) -> str:
-    repaired = _chat_via_windows_ollama(REPAIR_PROMPT, raw_content, TRIAGE_SCHEMA)
+    repaired = _chat_via_windows_ollama(REPAIR_PROMPT, raw_content, "json")
     if not repaired:
         raise RuntimeError("Repair pass returned empty output")
     return repaired
 
 
 def _generate_with_ollama(user_prompt: str) -> tuple[str, str]:
+    import requests as _requests
+
+    payload = {
+        "model": MODEL_NAME,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        "options": {"temperature": 0.2},
+        "format": "json",
+        "stream": False,
+    }
+
     try:
-        response = ollama.chat(
-            model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            options={"temperature": 0.2},
-            format=TRIAGE_SCHEMA,
+        resp = _requests.post(
+            f"{OLLAMA_HOST}/api/chat",
+            json=payload,
+            timeout=3600,
         )
-        content = _extract_content(response)
+        resp.raise_for_status()
+        data = resp.json()
+        content = (data.get("message") or {}).get("content", "").strip()
         if not content:
-            raise RuntimeError("Model returned empty content")
-        return content, "python_ollama"
+            raise RuntimeError("Ollama returned empty content")
+        return content, "requests_direct"
     except Exception:
-        fallback_content = _chat_via_windows_ollama(SYSTEM_PROMPT, user_prompt, TRIAGE_SCHEMA)
+        fallback_content = _chat_via_windows_ollama(SYSTEM_PROMPT, user_prompt, "json")
         return fallback_content, "windows_ollama_bridge"
 
 
