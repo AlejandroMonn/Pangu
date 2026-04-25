@@ -19,7 +19,7 @@ from pydantic import BaseModel
 app = FastAPI(title="Chaos-Triage", version="1.0.0")
 BASE_DIR = Path(__file__).resolve().parent
 
-MODEL_NAME = os.getenv("OLLAMA_MODEL", "qwen3.5:9b").strip()
+MODEL_NAME = os.getenv("OLLAMA_MODEL", "qwen2.5:3b").strip()
 ALLOWED_URGENCY = {"low", "medium", "high"}
 ALLOWED_ENERGY = {"light", "medium", "deep"}
 
@@ -554,29 +554,40 @@ $response.message.content
 
 
 def _repair_content(raw_content: str) -> str:
-    repaired = _chat_via_windows_ollama(REPAIR_PROMPT, raw_content, TRIAGE_SCHEMA)
+    repaired = _chat_via_windows_ollama(REPAIR_PROMPT, raw_content, "json")
     if not repaired:
         raise RuntimeError("Repair pass returned empty output")
     return repaired
 
 
 def _generate_with_ollama(user_prompt: str) -> tuple[str, str]:
+    import requests as _requests
+
+    payload = {
+        "model": MODEL_NAME,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        "options": {"temperature": 0.2},
+        "format": "json",
+        "stream": False,
+    }
+
     try:
-        response = ollama.chat(
-            model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            options={"temperature": 0.2},
-            format=TRIAGE_SCHEMA,
+        resp = _requests.post(
+            f"{OLLAMA_HOST}/api/chat",
+            json=payload,
+            timeout=300,
         )
-        content = _extract_content(response)
+        resp.raise_for_status()
+        data = resp.json()
+        content = (data.get("message") or {}).get("content", "").strip()
         if not content:
-            raise RuntimeError("Model returned empty content")
-        return content, "python_ollama"
+            raise RuntimeError("Ollama returned empty content")
+        return content, "requests_direct"
     except Exception:
-        fallback_content = _chat_via_windows_ollama(SYSTEM_PROMPT, user_prompt, TRIAGE_SCHEMA)
+        fallback_content = _chat_via_windows_ollama(SYSTEM_PROMPT, user_prompt, "json")
         return fallback_content, "windows_ollama_bridge"
 
 
