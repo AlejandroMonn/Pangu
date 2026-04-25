@@ -9,7 +9,7 @@ Chaos-Triage is a 100% local planning tool that turns an unstructured brain dump
 - a draggable Kanban board
 - a persistent day-planning workspace in the browser
 
-The app is designed to run locally on Windows, use a local Ollama model, and keep all inference on the machine. The current default model is `qwen3:8b`.
+The app is designed to run locally on Windows, use a local Ollama model, and keep all inference on the machine. The current default model is `qwen3.5:9b`.
 
 The system is intentionally split into two layers:
 
@@ -114,7 +114,7 @@ Environment variables:
   - default: `http://127.0.0.1:11434`
   - set before importing `ollama` so the Python Ollama client uses the right host
 - `OLLAMA_MODEL`
-  - default: `qwen3:8b`
+  - default: `qwen3.5:9b`
 
 
 ## 6. API Endpoints
@@ -140,7 +140,7 @@ Response shape:
 ```json
 {
   "ok": true,
-  "model": "qwen3:8b",
+  "model": "qwen3.5:9b",
   "ollama_host": "http://127.0.0.1:11434"
 }
 ```
@@ -183,7 +183,7 @@ Response shape:
     }
   ],
   "meta": {
-    "model": "qwen3:8b",
+    "model": "qwen3.5:9b",
     "generated_at": "2026-04-01T00:00:00+00:00",
     "transport": "python_ollama",
     "task_seeds": ["clean room", "study calculus"]
@@ -1109,8 +1109,8 @@ Responsibilities:
 
 Model tag format:
 
-- `Model: qwen3:8b via python_ollama`
-- `Model: qwen3:8b via windows_ollama_bridge`
+- `Model: qwen3.5:9b via python_ollama`
+- `Model: qwen3.5:9b via windows_ollama_bridge`
 
 
 ## 30. Windows Launch System
@@ -1370,7 +1370,7 @@ Meaning:
 
 What to check:
 
-- model is actually `qwen3:8b`
+- model is actually `qwen3.5:9b`
 - Ollama is healthy
 - the prompt was not manually changed in a way that weakens JSON enforcement
 
