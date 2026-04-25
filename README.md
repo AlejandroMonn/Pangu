@@ -26,7 +26,7 @@ That is why the generated plan always starts with every task in `Pendientes`. No
 
 ## Core Features
 
-- Local AI triage using Ollama and `qwen3.5:9b`
+- Local AI triage using Ollama and `qwen3:8b`
 - Comma-first task extraction for more predictable task boundaries
 - Strict JSON output contract for stable backend parsing
 - Human-friendly coach panel for the day plan
@@ -119,12 +119,12 @@ Before running the app, install:
 
 - Windows Python 3.12 or newer
 - [Ollama](https://ollama.com/)
-- the local model `qwen3.5:9b`
+- the local model `qwen3:8b`
 
 Pull the model:
 
 ```bash
-ollama pull qwen3.5:9b
+ollama pull qwen3:8b
 ```
 
 ## Running the App
@@ -172,7 +172,7 @@ http://127.0.0.1:8000
 Optional environment variables:
 
 - `OLLAMA_MODEL`
-  - default: `qwen3.5:9b`
+  - default: `qwen3:8b`
 - `CHAOS_TRIAGE_MODEL`
   - Windows launcher override for the startup script
 - `OLLAMA_HOST`
@@ -181,7 +181,7 @@ Optional environment variables:
 Example:
 
 ```bash
-set OLLAMA_MODEL=qwen3.5:9b
+set OLLAMA_MODEL=qwen3:8b
 uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
@@ -256,7 +256,7 @@ That file covers:
 If the launcher says the model is missing, install it with:
 
 ```bash
-ollama pull qwen3.5:9b
+ollama pull qwen3:8b
 ```
 
 ## Recommended Public Repo Contents

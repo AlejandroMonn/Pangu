@@ -62,22 +62,7 @@
       }
 
       .kanban-shell {
-        display: flex;
-        min-height: 30rem;
-        flex-direction: column;
         transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
-      }
-
-      .kanban-list {
-        position: relative;
-        display: flex;
-        flex: 1 1 auto;
-        flex-direction: column;
-        gap: 0.75rem;
-        min-height: 15rem;
-        border-radius: 1rem;
-        padding: 0.35rem;
-        transition: background-color 160ms ease, box-shadow 160ms ease;
       }
 
       .kanban-shell.is-drop-ready {
@@ -95,25 +80,22 @@
       }
 
       .kanban-list.is-drop-target {
-        min-height: 15rem;
-        background: rgba(8, 47, 73, 0.18);
-        box-shadow: inset 0 0 0 1px rgba(103, 232, 249, 0.22);
+        min-height: 10rem;
       }
 
       .kanban-list.is-drop-target::after {
-        content: "Suelta la tarjeta en cualquier parte de esta columna";
+        content: "Suelta la tarjeta aqui";
         display: flex;
-        flex: 1 1 auto;
         align-items: center;
         justify-content: center;
-        min-height: 5.5rem;
+        min-height: 4.75rem;
         border: 1px dashed rgba(103, 232, 249, 0.38);
         border-radius: 1rem;
         color: rgb(165 243 252);
         font-size: 0.8rem;
         letter-spacing: 0.02em;
         background: rgba(8, 47, 73, 0.24);
-        margin-top: 0.25rem;
+        margin-top: 0.5rem;
       }
     </style>
   </head>
@@ -246,7 +228,7 @@
                 <h3 class="text-lg font-semibold text-white">Pendientes</h3>
                 <p class="text-xs text-slate-400">Orden sugerido, pero totalmente tuyo para reorganizar.</p>
               </div>
-              <div id="backlogList" data-column="backlog" class="kanban-list"></div>
+              <div id="backlogList" data-column="backlog" class="kanban-list space-y-3 min-h-[8rem]"></div>
             </section>
 
             <section data-column-shell="in_progress" class="kanban-shell rounded-2xl border border-amber-300/20 bg-slate-900/50 p-4">
@@ -254,7 +236,7 @@
                 <h3 class="text-lg font-semibold text-white">En Progreso</h3>
                 <p class="text-xs text-slate-400">Solo las tarjetas que moviste intencionalmente para empezar.</p>
               </div>
-              <div id="progressList" data-column="in_progress" class="kanban-list"></div>
+              <div id="progressList" data-column="in_progress" class="kanban-list space-y-3 min-h-[8rem]"></div>
             </section>
 
             <section data-column-shell="done" class="kanban-shell rounded-2xl border border-emerald-300/20 bg-slate-900/50 p-4">
@@ -262,7 +244,7 @@
                 <h3 class="text-lg font-semibold text-white">Completadas</h3>
                 <p class="text-xs text-slate-400">Mantén visibles las victorias. El impulso importa.</p>
               </div>
-              <div id="doneList" data-column="done" class="kanban-list"></div>
+              <div id="doneList" data-column="done" class="kanban-list space-y-3 min-h-[8rem]"></div>
             </section>
           </div>
         </div>
@@ -281,8 +263,8 @@
 
       const COLUMN_META = {
         backlog: { label: 'Pendientes', empty: 'No hay tareas pendientes con este filtro.' },
-        in_progress: { label: 'En Progreso', empty: 'Suelta una tarjeta en cualquier parte de esta columna cuando realmente la empieces.' },
-        done: { label: 'Completadas', empty: 'Suelta una tarjeta en cualquier parte de esta columna cuando la termines.' }
+        in_progress: { label: 'En Progreso', empty: 'Arrastra una tarjeta aquí cuando realmente la empieces.' },
+        done: { label: 'Completadas', empty: 'Las tareas terminadas aparecerán aquí.' }
       };
 
       const URGENCY_STYLE = {
@@ -757,7 +739,7 @@
       }
 
       function renderEmptyState(column) {
-        return `<div data-empty-state="true" class="pointer-events-none flex min-h-[8rem] items-center justify-center rounded-2xl border border-dashed border-white/10 p-4 text-center text-sm text-slate-500">${COLUMN_META[column].empty}</div>`;
+        return `<div data-empty-state="true" class="pointer-events-none rounded-2xl border border-dashed border-white/10 p-4 text-sm text-slate-500">${COLUMN_META[column].empty}</div>`;
       }
 
       function renderColumn(column, element) {
@@ -917,14 +899,11 @@
           sortables.push(
             Sortable.create(element, {
               group: 'chaos-board',
-              animation: 180,
+              animation: 170,
               draggable: '.task-card',
               delayOnTouchOnly: true,
               delay: 80,
-              emptyInsertThreshold: 160,
-              fallbackTolerance: 4,
-              swapThreshold: 0.65,
-              invertSwap: true,
+              emptyInsertThreshold: 28,
               setData(dataTransfer, dragEl) {
                 dataTransfer.setData('text/plain', dragEl.dataset.taskId || '');
               },
@@ -981,8 +960,8 @@
         renderColumn('in_progress', progressList);
         renderColumn('done', doneList);
         boardHint.textContent = currentFilter === 'all'
-          ? 'Tip: arrastra la tarjeta completa y suéltala en cualquier parte de la columna que quieras.'
-          : `Filtro activo: ${currentFilter}. Puedes soltar la tarjeta en cualquier parte de la columna visible.`;
+          ? 'Tip: arrastra la tarjeta completa para definir el orden real de ejecución.'
+          : `Filtro activo: ${currentFilter}. Arrastrar sigue actualizando la vista filtrada.`;
         attachCardActions();
         initSortables();
       }
