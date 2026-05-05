@@ -738,6 +738,7 @@
             <div class="mt-3 flex flex-wrap gap-2 text-xs">
               <button type="button" data-action="move-progress" data-task-id="${escapeHtml(id)}" class="rounded-full bg-teal-500 px-3 py-1 font-semibold text-white transition hover:bg-teal-400">Empezar</button>
               <button type="button" data-action="move-done" data-task-id="${escapeHtml(id)}" class="rounded-full bg-white/5 px-3 py-1 text-slate-300 transition hover:bg-white/10">Completar</button>
+              <button type="button" data-action="toggle-edit" data-task-id="${escapeHtml(id)}" class="rounded-full bg-cyan-500/15 px-3 py-1 text-cyan-100 transition hover:bg-cyan-500/25">Editar</button>
               <button type="button" data-action="delete-task" data-task-id="${escapeHtml(id)}" class="rounded-full bg-rose-500/15 px-3 py-1 text-rose-200 transition hover:bg-rose-500/25">Eliminar</button>
             </div>
           `;
@@ -748,6 +749,7 @@
             <div class="mt-3 flex flex-wrap gap-2 text-xs">
               <button type="button" data-action="move-backlog" data-task-id="${escapeHtml(id)}" class="rounded-full bg-white/5 px-3 py-1 text-slate-300 transition hover:bg-white/10">Volver</button>
               <button type="button" data-action="move-done" data-task-id="${escapeHtml(id)}" class="rounded-full bg-emerald-500 px-3 py-1 font-semibold text-white transition hover:bg-emerald-400">Completar</button>
+              <button type="button" data-action="toggle-edit" data-task-id="${escapeHtml(id)}" class="rounded-full bg-cyan-500/15 px-3 py-1 text-cyan-100 transition hover:bg-cyan-500/25">Editar</button>
               <button type="button" data-action="delete-task" data-task-id="${escapeHtml(id)}" class="rounded-full bg-rose-500/15 px-3 py-1 text-rose-200 transition hover:bg-rose-500/25">Eliminar</button>
             </div>
           `;
@@ -756,8 +758,52 @@
         return `
           <div class="mt-3 flex flex-wrap gap-2 text-xs">
             <button type="button" data-action="move-backlog" data-task-id="${escapeHtml(id)}" class="rounded-full bg-white/5 px-3 py-1 text-slate-300 transition hover:bg-white/10">Reabrir</button>
+            <button type="button" data-action="toggle-edit" data-task-id="${escapeHtml(id)}" class="rounded-full bg-cyan-500/15 px-3 py-1 text-cyan-100 transition hover:bg-cyan-500/25">Editar</button>
             <button type="button" data-action="delete-task" data-task-id="${escapeHtml(id)}" class="rounded-full bg-rose-500/15 px-3 py-1 text-rose-200 transition hover:bg-rose-500/25">Eliminar</button>
           </div>
+        `;
+      }
+
+      function renderTaskEditForm(task, id) {
+        return `
+          <form class="task-edit-form mt-3 hidden rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-3" data-edit-form="${escapeHtml(id)}" data-no-drag>
+            <label class="block text-[10px] uppercase tracking-[0.16em] text-slate-500">
+              Nombre
+              <textarea data-edit-field="title" rows="2" class="mt-1 w-full resize-y rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-white outline-none transition focus:border-cyan-300/60">${escapeHtml(task.title)}</textarea>
+            </label>
+            <div class="mt-3 grid gap-3 sm:grid-cols-[1fr_5rem]">
+              <label class="block text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                Tema
+                <input data-edit-field="topic" value="${escapeHtml(task.topic)}" class="mt-1 w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-xs normal-case tracking-normal text-white outline-none transition focus:border-cyan-300/60" />
+              </label>
+              <label class="block text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                Min
+                <input data-edit-field="estimated_minutes" type="number" min="5" step="5" value="${escapeHtml(task.estimated_minutes)}" class="mt-1 w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-xs normal-case tracking-normal text-white outline-none transition focus:border-cyan-300/60" />
+              </label>
+            </div>
+            <label class="mt-3 block text-[10px] uppercase tracking-[0.16em] text-slate-500">
+              Energía
+              <select data-edit-field="energy_level" class="mt-1 w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-xs normal-case tracking-normal text-white outline-none transition focus:border-cyan-300/60">
+                <option value="low" ${task.energy_level === 'low' ? 'selected' : ''}>low</option>
+                <option value="medium" ${task.energy_level === 'medium' ? 'selected' : ''}>medium</option>
+                <option value="high" ${task.energy_level === 'high' ? 'selected' : ''}>high</option>
+                <option value="deep" ${task.energy_level === 'deep' ? 'selected' : ''}>deep</option>
+                <option value="light" ${task.energy_level === 'light' ? 'selected' : ''}>light</option>
+              </select>
+            </label>
+            <label class="mt-3 block text-[10px] uppercase tracking-[0.16em] text-slate-500">
+              Descripción
+              <textarea data-edit-field="details" rows="3" class="mt-1 w-full resize-y rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-xs normal-case tracking-normal text-white outline-none transition focus:border-cyan-300/60">${escapeHtml(task.details || '')}</textarea>
+            </label>
+            <label class="mt-3 block text-[10px] uppercase tracking-[0.16em] text-slate-500">
+              Primer paso
+              <textarea data-edit-field="first_move" rows="2" class="mt-1 w-full resize-y rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-xs normal-case tracking-normal text-white outline-none transition focus:border-cyan-300/60">${escapeHtml(task.first_move || '')}</textarea>
+            </label>
+            <div class="mt-3 flex flex-wrap gap-2 text-xs">
+              <button type="button" data-action="save-edit" data-task-id="${escapeHtml(id)}" class="rounded-full bg-cyan-400 px-3 py-1 font-semibold text-slate-950 transition hover:bg-cyan-300">Guardar cambios</button>
+              <button type="button" data-action="cancel-edit" data-task-id="${escapeHtml(id)}" class="rounded-full bg-white/5 px-3 py-1 text-slate-300 transition hover:bg-white/10">Cancelar</button>
+            </div>
+          </form>
         `;
       }
 
@@ -807,6 +853,7 @@
                   <span class="rounded-full bg-black/20 px-3 py-1">${escapeHtml(task.energy_level)} energía</span>
                 </div>
                 ${renderTaskDetails(task)}
+                ${renderTaskEditForm(task, id)}
                 ${renderStatusActions(id, column)}
               </div>
             </div>
@@ -1010,6 +1057,51 @@
         setQuickMessage(`"${label}" fue eliminada del tablero.`);
       }
 
+      function toggleEditForm(id, button) {
+        const card = button.closest('.task-card');
+        const form = card?.querySelector('[data-edit-form]');
+        if (!form) return;
+        form.classList.toggle('hidden');
+      }
+
+      function editFieldValue(form, fieldName) {
+        return String(form.querySelector(`[data-edit-field="${fieldName}"]`)?.value || '').trim();
+      }
+
+      function saveTaskEdits(id, button) {
+        if (!currentPlan) return;
+        const card = button.closest('.task-card');
+        const form = card?.querySelector('[data-edit-form]');
+        const task = taskMap.get(id);
+        if (!form || !task) return;
+
+        const nextTitle = editFieldValue(form, 'title').replace(/\s+/g, ' ');
+        if (!nextTitle) {
+          setQuickMessage('El nombre de la tarea no puede quedar vacío.', 'error');
+          return;
+        }
+
+        task.client_id = task.client_id || task.task_id || id;
+        task.title = nextTitle;
+        task.topic = normalizeTopicText(editFieldValue(form, 'topic'));
+        task.estimated_minutes = Math.max(5, Number(editFieldValue(form, 'estimated_minutes')) || 20);
+        task.energy_level = editFieldValue(form, 'energy_level') || 'medium';
+        task.details = editFieldValue(form, 'details') || nextTitle;
+        task.first_move = editFieldValue(form, 'first_move') || nextTitle;
+
+        currentPlan.tasks = currentPlan.tasks.map((item) => taskId(item) === id ? task : item);
+        currentPlan.topics = uniqueTopics(currentPlan.tasks.map((item) => item.topic));
+        if (currentFilter !== 'all' && !currentPlan.topics.includes(currentFilter)) {
+          currentFilter = 'all';
+        }
+
+        setTaskMap(currentPlan.tasks);
+        hasInteracted = true;
+        persistState();
+        renderPlan();
+        setQuickMessage(`"${nextTitle}" fue actualizada.`);
+      }
+
       function handleSortEnd(evt) {
         const source = evt.from.dataset.column;
         const target = evt.to.dataset.column;
@@ -1051,7 +1143,7 @@
               setData(dataTransfer, dragEl) {
                 dataTransfer.setData('text/plain', dragEl.dataset.taskId || '');
               },
-              filter: 'button,[data-no-drag]',
+              filter: 'button,input,textarea,select,summary,[data-no-drag],[data-no-drag] *',
               preventOnFilter: false,
               ghostClass: 'sortable-ghost',
               chosenClass: 'sortable-chosen',
@@ -1093,6 +1185,18 @@
             }
             if (action === 'move-done') {
               moveTaskToColumn(id, 'done');
+              return;
+            }
+            if (action === 'toggle-edit') {
+              toggleEditForm(id, button);
+              return;
+            }
+            if (action === 'save-edit') {
+              saveTaskEdits(id, button);
+              return;
+            }
+            if (action === 'cancel-edit') {
+              renderPlan();
               return;
             }
             if (action === 'delete-task') {
