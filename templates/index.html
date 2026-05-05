@@ -97,6 +97,26 @@
         background: rgba(8, 47, 73, 0.24);
         margin-top: 0.5rem;
       }
+
+      body.is-kanban-dragging {
+        cursor: grabbing;
+      }
+
+      .column-count {
+        min-width: 1.75rem;
+        text-align: center;
+      }
+
+      .task-title-clamped {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+
+      details.task-details[open] summary {
+        color: rgb(165 243 252);
+      }
     </style>
   </head>
   <body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
@@ -225,7 +245,10 @@
           <div class="grid gap-4 xl:grid-cols-3">
             <section data-column-shell="backlog" class="kanban-shell rounded-2xl border border-cyan-300/20 bg-slate-900/50 p-4">
               <div class="mb-4">
-                <h3 class="text-lg font-semibold text-white">Pendientes</h3>
+                <div class="flex items-center justify-between gap-3">
+                  <h3 class="text-lg font-semibold text-white">Pendientes</h3>
+                  <span id="backlogCount" class="column-count rounded-full border border-cyan-300/25 bg-cyan-300/10 px-2 py-1 text-xs font-semibold text-cyan-100">0</span>
+                </div>
                 <p class="text-xs text-slate-400">Orden sugerido, pero totalmente tuyo para reorganizar.</p>
               </div>
               <div id="backlogList" data-column="backlog" class="kanban-list space-y-3 min-h-[8rem]"></div>
@@ -233,7 +256,10 @@
 
             <section data-column-shell="in_progress" class="kanban-shell rounded-2xl border border-amber-300/20 bg-slate-900/50 p-4">
               <div class="mb-4">
-                <h3 class="text-lg font-semibold text-white">En Progreso</h3>
+                <div class="flex items-center justify-between gap-3">
+                  <h3 class="text-lg font-semibold text-white">En Progreso</h3>
+                  <span id="progressCount" class="column-count rounded-full border border-amber-300/25 bg-amber-300/10 px-2 py-1 text-xs font-semibold text-amber-100">0</span>
+                </div>
                 <p class="text-xs text-slate-400">Solo las tarjetas que moviste intencionalmente para empezar.</p>
               </div>
               <div id="progressList" data-column="in_progress" class="kanban-list space-y-3 min-h-[8rem]"></div>
@@ -241,7 +267,10 @@
 
             <section data-column-shell="done" class="kanban-shell rounded-2xl border border-emerald-300/20 bg-slate-900/50 p-4">
               <div class="mb-4">
-                <h3 class="text-lg font-semibold text-white">Completadas</h3>
+                <div class="flex items-center justify-between gap-3">
+                  <h3 class="text-lg font-semibold text-white">Completadas</h3>
+                  <span id="doneCount" class="column-count rounded-full border border-emerald-300/25 bg-emerald-300/10 px-2 py-1 text-xs font-semibold text-emerald-100">0</span>
+                </div>
                 <p class="text-xs text-slate-400">Mantén visibles las victorias. El impulso importa.</p>
               </div>
               <div id="doneList" data-column="done" class="kanban-list space-y-3 min-h-[8rem]"></div>
@@ -291,6 +320,9 @@
       const backlogList = document.getElementById('backlogList');
       const progressList = document.getElementById('progressList');
       const doneList = document.getElementById('doneList');
+      const backlogCount = document.getElementById('backlogCount');
+      const progressCount = document.getElementById('progressCount');
+      const doneCount = document.getElementById('doneCount');
       const quickTaskInput = document.getElementById('quickTaskInput');
       const quickAddBtn = document.getElementById('quickAddBtn');
       const quickAddMsg = document.getElementById('quickAddMsg');
@@ -307,6 +339,12 @@
       let sortables = [];
       let activeDropColumn = null;
       let localTaskCounter = 0;
+      let isBoardDragging = false;
+      let autoScrollPointerY = null;
+      let autoScrollFrame = null;
+
+      const AUTO_SCROLL_EDGE = 120;
+      const AUTO_SCROLL_MAX_SPEED = 30;
 
       function setLoading(isLoading) {
         organizeBtn.disabled = isLoading;
@@ -601,6 +639,21 @@
         return getColumnTasks(column).filter((task) => taskMatchesFilterId(taskId(task)));
       }
 
+      function updateColumnCounts() {
+        const countElements = {
+          backlog: backlogCount,
+          in_progress: progressCount,
+          done: doneCount
+        };
+
+        Object.entries(countElements).forEach(([column, element]) => {
+          const total = getColumnTasks(column).length;
+          const visible = getFilteredColumnTasks(column).length;
+          element.textContent = currentFilter === 'all' ? String(total) : `${visible}/${total}`;
+          element.setAttribute('aria-label', `${visible} visibles de ${total} tareas en ${COLUMN_META[column].label}`);
+        });
+      }
+
       function buildLiveCoach() {
         const backlog = getFilteredColumnTasks('backlog');
         const doing = getFilteredColumnTasks('in_progress');
@@ -708,6 +761,28 @@
         `;
       }
 
+      function renderTaskDetails(task) {
+        return `
+          <details class="task-details mt-3 rounded-xl border border-white/10 bg-black/15 px-3 py-2" data-no-drag>
+            <summary class="cursor-pointer select-none text-xs font-semibold text-cyan-100 transition hover:text-cyan-50">Ver tarea completa</summary>
+            <div class="mt-3 space-y-3 text-xs leading-5 text-slate-300">
+              <div>
+                <p class="text-[10px] uppercase tracking-[0.16em] text-slate-500">Nombre completo</p>
+                <p class="mt-1 break-words text-sm font-semibold text-white">${escapeHtml(task.title)}</p>
+              </div>
+              <div>
+                <p class="text-[10px] uppercase tracking-[0.16em] text-slate-500">Descripción</p>
+                <p class="mt-1 break-words">${escapeHtml(task.details || 'Sin descripción adicional.')}</p>
+              </div>
+              <div>
+                <p class="text-[10px] uppercase tracking-[0.16em] text-slate-500">Primer paso</p>
+                <p class="mt-1 break-words">${escapeHtml(task.first_move || 'Empieza con una acción pequeña y concreta.')}</p>
+              </div>
+            </div>
+          </details>
+        `;
+      }
+
       function renderCard(task, column, index) {
         const id = taskId(task);
         const meta = topicMeta(task.topic);
@@ -723,7 +798,7 @@
                 <div class="flex items-start justify-between gap-3">
                   <div class="min-w-0">
                     <p class="text-[11px] uppercase tracking-[0.18em] text-slate-400">${escapeHtml(positionLabel)}</p>
-                    <h4 class="mt-1 truncate text-base font-semibold text-white">${escapeHtml(task.title)}</h4>
+                    <h4 class="task-title-clamped mt-1 text-base font-semibold leading-6 text-white" title="${escapeHtml(task.title)}">${escapeHtml(task.title)}</h4>
                   </div>
                 </div>
                 <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
@@ -731,6 +806,7 @@
                   <span class="rounded-full bg-black/20 px-3 py-1">${task.estimated_minutes} min</span>
                   <span class="rounded-full bg-black/20 px-3 py-1">${escapeHtml(task.energy_level)} energía</span>
                 </div>
+                ${renderTaskDetails(task)}
                 ${renderStatusActions(id, column)}
               </div>
             </div>
@@ -760,6 +836,68 @@
         document.querySelectorAll('.kanban-list').forEach((list) => {
           list.classList.remove('is-drop-target');
         });
+      }
+
+      function dragClientY(event) {
+        if (event?.touches?.length) return event.touches[0].clientY;
+        if (event?.changedTouches?.length) return event.changedTouches[0].clientY;
+        if (typeof event?.clientY === 'number') return event.clientY;
+        return null;
+      }
+
+      function updateAutoScrollPointer(event) {
+        if (!isBoardDragging) return;
+        const clientY = dragClientY(event);
+        if (clientY !== null) autoScrollPointerY = clientY;
+      }
+
+      function autoScrollTick() {
+        if (!isBoardDragging) {
+          autoScrollFrame = null;
+          return;
+        }
+
+        if (autoScrollPointerY !== null) {
+          const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+          const distanceTop = autoScrollPointerY;
+          const distanceBottom = viewportHeight - autoScrollPointerY;
+          let delta = 0;
+
+          if (distanceTop < AUTO_SCROLL_EDGE) {
+            const intensity = (AUTO_SCROLL_EDGE - distanceTop) / AUTO_SCROLL_EDGE;
+            delta = -Math.ceil(intensity * AUTO_SCROLL_MAX_SPEED);
+          } else if (distanceBottom < AUTO_SCROLL_EDGE) {
+            const intensity = (AUTO_SCROLL_EDGE - distanceBottom) / AUTO_SCROLL_EDGE;
+            delta = Math.ceil(intensity * AUTO_SCROLL_MAX_SPEED);
+          }
+
+          if (delta) window.scrollBy({ top: delta, left: 0, behavior: 'auto' });
+        }
+
+        autoScrollFrame = window.requestAnimationFrame(autoScrollTick);
+      }
+
+      function startDragAutoScroll(event) {
+        isBoardDragging = true;
+        document.body.classList.add('is-kanban-dragging');
+        updateAutoScrollPointer(event);
+        document.addEventListener('dragover', updateAutoScrollPointer, { passive: true });
+        document.addEventListener('touchmove', updateAutoScrollPointer, { passive: true });
+        document.addEventListener('pointermove', updateAutoScrollPointer, { passive: true });
+        if (!autoScrollFrame) autoScrollFrame = window.requestAnimationFrame(autoScrollTick);
+      }
+
+      function stopDragAutoScroll() {
+        isBoardDragging = false;
+        autoScrollPointerY = null;
+        document.body.classList.remove('is-kanban-dragging');
+        document.removeEventListener('dragover', updateAutoScrollPointer);
+        document.removeEventListener('touchmove', updateAutoScrollPointer);
+        document.removeEventListener('pointermove', updateAutoScrollPointer);
+        if (autoScrollFrame) {
+          window.cancelAnimationFrame(autoScrollFrame);
+          autoScrollFrame = null;
+        }
       }
 
       function setDropTarget(column) {
@@ -901,9 +1039,15 @@
               group: 'chaos-board',
               animation: 170,
               draggable: '.task-card',
+              scroll: true,
+              bubbleScroll: true,
+              forceAutoScrollFallback: true,
+              scrollSensitivity: 120,
+              scrollSpeed: 18,
+              fallbackOnBody: true,
               delayOnTouchOnly: true,
               delay: 80,
-              emptyInsertThreshold: 28,
+              emptyInsertThreshold: 160,
               setData(dataTransfer, dragEl) {
                 dataTransfer.setData('text/plain', dragEl.dataset.taskId || '');
               },
@@ -914,13 +1058,16 @@
               dragClass: 'sortable-drag',
               onStart(evt) {
                 beginDragFeedback();
+                startDragAutoScroll(evt.originalEvent);
                 setDropTarget(evt.from?.dataset.column || null);
               },
               onMove(evt) {
+                updateAutoScrollPointer(evt.originalEvent);
                 setDropTarget(evt.to?.dataset.column || evt.from?.dataset.column || null);
                 return true;
               },
               onEnd(evt) {
+                stopDragAutoScroll();
                 clearDropTargets();
                 handleSortEnd(evt);
               }
@@ -959,9 +1106,10 @@
         renderColumn('backlog', backlogList);
         renderColumn('in_progress', progressList);
         renderColumn('done', doneList);
+        updateColumnCounts();
         boardHint.textContent = currentFilter === 'all'
-          ? 'Tip: arrastra la tarjeta completa para definir el orden real de ejecución.'
-          : `Filtro activo: ${currentFilter}. Arrastrar sigue actualizando la vista filtrada.`;
+          ? 'Tip: mantén la tarjeta agarrada cerca del borde superior o inferior para desplazarte sin soltarla.'
+          : `Filtro activo: ${currentFilter}. Puedes arrastrar y desplazarte sin soltar la tarjeta.`;
         attachCardActions();
         initSortables();
       }
