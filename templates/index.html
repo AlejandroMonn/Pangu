@@ -38,8 +38,8 @@
       }
 
       .task-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 18px 42px rgba(8, 145, 178, 0.14);
+        transform: translateY(-1px);
+        box-shadow: 0 12px 28px rgba(8, 145, 178, 0.10);
       }
 
       .task-card:active {
@@ -47,21 +47,24 @@
       }
 
       .task-card.sortable-ghost {
-        opacity: 0.22;
+        opacity: 0.45;
       }
 
       .task-card.sortable-chosen {
-        border-color: rgba(103, 232, 249, 0.65);
-        box-shadow: 0 0 0 1px rgba(103, 232, 249, 0.28), 0 16px 40px rgba(6, 182, 212, 0.22);
+        border-color: rgba(103, 232, 249, 0.42);
+        box-shadow: 0 0 0 1px rgba(103, 232, 249, 0.16), 0 10px 28px rgba(6, 182, 212, 0.14);
       }
 
       .task-card.sortable-drag {
-        opacity: 0.95 !important;
-        transform: rotate(1deg) scale(1.02);
-        box-shadow: 0 24px 48px rgba(2, 132, 199, 0.28);
+        opacity: 0.9 !important;
+        transform: scale(1.005);
+        box-shadow: 0 16px 34px rgba(2, 132, 199, 0.16);
       }
 
       .kanban-shell {
+        display: flex;
+        min-height: 24rem;
+        flex-direction: column;
         transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
       }
 
@@ -73,14 +76,13 @@
 
       .kanban-shell.is-drop-target {
         border-style: dashed;
-        border-color: rgba(34, 211, 238, 0.72);
-        background: linear-gradient(180deg, rgba(8, 47, 73, 0.42), rgba(15, 23, 42, 0.82));
-        box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.18), 0 0 32px rgba(6, 182, 212, 0.16);
-        transform: translateY(-2px);
+        border-color: rgba(34, 211, 238, 0.56);
+        background: linear-gradient(180deg, rgba(8, 47, 73, 0.32), rgba(15, 23, 42, 0.78));
+        box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.12), 0 0 24px rgba(6, 182, 212, 0.10);
       }
 
       .kanban-list.is-drop-target {
-        min-height: 10rem;
+        min-height: 18rem;
       }
 
       .kanban-list.is-drop-target::after {
@@ -116,6 +118,12 @@
 
       details.task-details[open] summary {
         color: rgb(165 243 252);
+      }
+
+      .kanban-list {
+        flex: 1;
+        padding-top: 0.25rem;
+        padding-bottom: 5rem;
       }
     </style>
   </head>
@@ -242,7 +250,18 @@
             <p id="boardHint" class="text-xs text-slate-500"></p>
           </div>
 
-          <div class="grid gap-4 xl:grid-cols-3">
+          <div class="grid gap-4 xl:grid-cols-4">
+            <section data-column-shell="daily" class="kanban-shell rounded-2xl border border-fuchsia-300/20 bg-slate-900/50 p-4">
+              <div class="mb-4">
+                <div class="flex items-center justify-between gap-3">
+                  <h3 class="text-lg font-semibold text-white">Diarias</h3>
+                  <span id="dailyCount" class="column-count rounded-full border border-fuchsia-300/25 bg-fuchsia-300/10 px-2 py-1 text-xs font-semibold text-fuchsia-100">0</span>
+                </div>
+                <p class="text-xs text-slate-400">Rutinas o tareas que vuelven a aparecer cada día.</p>
+              </div>
+              <div id="dailyList" data-column="daily" class="kanban-list min-h-[14rem] space-y-3"></div>
+            </section>
+
             <section data-column-shell="backlog" class="kanban-shell rounded-2xl border border-cyan-300/20 bg-slate-900/50 p-4">
               <div class="mb-4">
                 <div class="flex items-center justify-between gap-3">
@@ -251,7 +270,7 @@
                 </div>
                 <p class="text-xs text-slate-400">Orden sugerido, pero totalmente tuyo para reorganizar.</p>
               </div>
-              <div id="backlogList" data-column="backlog" class="kanban-list space-y-3 min-h-[8rem]"></div>
+              <div id="backlogList" data-column="backlog" class="kanban-list min-h-[14rem] space-y-3"></div>
             </section>
 
             <section data-column-shell="in_progress" class="kanban-shell rounded-2xl border border-amber-300/20 bg-slate-900/50 p-4">
@@ -262,7 +281,7 @@
                 </div>
                 <p class="text-xs text-slate-400">Solo las tarjetas que moviste intencionalmente para empezar.</p>
               </div>
-              <div id="progressList" data-column="in_progress" class="kanban-list space-y-3 min-h-[8rem]"></div>
+              <div id="progressList" data-column="in_progress" class="kanban-list min-h-[14rem] space-y-3"></div>
             </section>
 
             <section data-column-shell="done" class="kanban-shell rounded-2xl border border-emerald-300/20 bg-slate-900/50 p-4">
@@ -273,7 +292,7 @@
                 </div>
                 <p class="text-xs text-slate-400">Mantén visibles las victorias. El impulso importa.</p>
               </div>
-              <div id="doneList" data-column="done" class="kanban-list space-y-3 min-h-[8rem]"></div>
+              <div id="doneList" data-column="done" class="kanban-list min-h-[14rem] space-y-3"></div>
             </section>
           </div>
         </div>
@@ -291,10 +310,12 @@
       ];
 
       const COLUMN_META = {
+        daily: { label: 'Diarias', empty: 'Suelta aquí rutinas o tareas repetibles del día.' },
         backlog: { label: 'Pendientes', empty: 'No hay tareas pendientes con este filtro.' },
         in_progress: { label: 'En Progreso', empty: 'Arrastra una tarjeta aquí cuando realmente la empieces.' },
         done: { label: 'Completadas', empty: 'Las tareas terminadas aparecerán aquí.' }
       };
+      const BOARD_COLUMNS = Object.keys(COLUMN_META);
 
       const URGENCY_STYLE = {
         high: 'bg-rose-500/15 text-rose-200 border-rose-400/30',
@@ -317,9 +338,11 @@
       const coachSteps = document.getElementById('coachSteps');
       const filterBar = document.getElementById('filterBar');
       const boardHint = document.getElementById('boardHint');
+      const dailyList = document.getElementById('dailyList');
       const backlogList = document.getElementById('backlogList');
       const progressList = document.getElementById('progressList');
       const doneList = document.getElementById('doneList');
+      const dailyCount = document.getElementById('dailyCount');
       const backlogCount = document.getElementById('backlogCount');
       const progressCount = document.getElementById('progressCount');
       const doneCount = document.getElementById('doneCount');
@@ -332,7 +355,7 @@
       let currentPlan = null;
       let initialCoach = null;
       let taskMap = new Map();
-      let boardState = { backlog: [], in_progress: [], done: [] };
+      let boardState = { daily: [], backlog: [], in_progress: [], done: [] };
       let taskStatus = {};
       let currentFilter = 'all';
       let hasInteracted = false;
@@ -345,6 +368,13 @@
 
       const AUTO_SCROLL_EDGE = 120;
       const AUTO_SCROLL_MAX_SPEED = 30;
+
+      function emptyBoardState() {
+        return BOARD_COLUMNS.reduce((state, column) => {
+          state[column] = [];
+          return state;
+        }, {});
+      }
 
       function setLoading(isLoading) {
         organizeBtn.disabled = isLoading;
@@ -504,11 +534,9 @@
       }
 
       function defaultBoard(tasks) {
-        return {
-          backlog: tasks.slice().sort((a, b) => a.step_number - b.step_number).map((task) => taskId(task)),
-          in_progress: [],
-          done: []
-        };
+        const board = emptyBoardState();
+        board.backlog = tasks.slice().sort((a, b) => a.step_number - b.step_number).map((task) => taskId(task));
+        return board;
       }
 
       function dedupe(ids) {
@@ -526,10 +554,10 @@
         const storedColumns = JSON.parse(localStorage.getItem(storageKey('columns')) || '{}');
         const storedStatus = JSON.parse(localStorage.getItem(storageKey('status')) || '{}');
         const storedFilter = localStorage.getItem(storageKey('filter')) || 'all';
-        const nextBoard = { backlog: [], in_progress: [], done: [] };
+        const nextBoard = emptyBoardState();
         const seen = new Set();
 
-        ['backlog', 'in_progress', 'done'].forEach((column) => {
+        BOARD_COLUMNS.forEach((column) => {
           const values = Array.isArray(storedColumns[column]) ? storedColumns[column] : [];
           values.forEach((id) => {
             if (ids.includes(id) && !seen.has(id)) {
@@ -541,7 +569,7 @@
 
         ids.forEach((id) => {
           if (seen.has(id)) return;
-          const target = ['backlog', 'in_progress', 'done'].includes(storedStatus[id]) ? storedStatus[id] : 'backlog';
+          const target = BOARD_COLUMNS.includes(storedStatus[id]) ? storedStatus[id] : 'backlog';
           nextBoard[target].push(id);
         });
 
@@ -588,11 +616,11 @@
           setTaskMap(hydratedPlan.tasks);
 
           const ids = hydratedPlan.tasks.map((task) => taskId(task));
-          const nextBoard = { backlog: [], in_progress: [], done: [] };
+          const nextBoard = emptyBoardState();
           const storedBoard = snapshot.boardState || {};
           const seen = new Set();
 
-          ['backlog', 'in_progress', 'done'].forEach((column) => {
+          BOARD_COLUMNS.forEach((column) => {
             const values = Array.isArray(storedBoard[column]) ? storedBoard[column] : [];
             values.forEach((id) => {
               if (ids.includes(id) && !seen.has(id)) {
@@ -641,6 +669,7 @@
 
       function updateColumnCounts() {
         const countElements = {
+          daily: dailyCount,
           backlog: backlogCount,
           in_progress: progressCount,
           done: doneCount
@@ -655,12 +684,13 @@
       }
 
       function buildLiveCoach() {
+        const daily = getFilteredColumnTasks('daily');
         const backlog = getFilteredColumnTasks('backlog');
         const doing = getFilteredColumnTasks('in_progress');
         const done = getFilteredColumnTasks('done');
-        const first = backlog[0] || doing[0] || done[0] || currentPlan.tasks[0];
-        const second = backlog[1] || doing[1] || currentPlan.tasks[1] || null;
-        const third = backlog[2] || currentPlan.tasks[2] || null;
+        const first = daily[0] || backlog[0] || doing[0] || done[0] || currentPlan.tasks[0];
+        const second = daily[1] || backlog[0] || backlog[1] || doing[1] || currentPlan.tasks[1] || null;
+        const third = backlog[1] || daily[2] || backlog[2] || currentPlan.tasks[2] || null;
         const hasLowPriorityTail = backlog.some((task) => task.lane === 'done_later');
 
         if (!first) {
@@ -733,10 +763,23 @@
       }
 
       function renderStatusActions(id, column) {
+        if (column === 'daily') {
+          return `
+            <div class="mt-3 flex flex-wrap gap-2 text-xs">
+              <button type="button" data-action="move-progress" data-task-id="${escapeHtml(id)}" class="rounded-full bg-teal-500 px-3 py-1 font-semibold text-white transition hover:bg-teal-400">Empezar</button>
+              <button type="button" data-action="move-backlog" data-task-id="${escapeHtml(id)}" class="rounded-full bg-white/5 px-3 py-1 text-slate-300 transition hover:bg-white/10">Pendiente</button>
+              <button type="button" data-action="move-done" data-task-id="${escapeHtml(id)}" class="rounded-full bg-white/5 px-3 py-1 text-slate-300 transition hover:bg-white/10">Completar</button>
+              <button type="button" data-action="toggle-edit" data-task-id="${escapeHtml(id)}" class="rounded-full bg-cyan-500/15 px-3 py-1 text-cyan-100 transition hover:bg-cyan-500/25">Editar</button>
+              <button type="button" data-action="delete-task" data-task-id="${escapeHtml(id)}" class="rounded-full bg-rose-500/15 px-3 py-1 text-rose-200 transition hover:bg-rose-500/25">Eliminar</button>
+            </div>
+          `;
+        }
+
         if (column === 'backlog') {
           return `
             <div class="mt-3 flex flex-wrap gap-2 text-xs">
               <button type="button" data-action="move-progress" data-task-id="${escapeHtml(id)}" class="rounded-full bg-teal-500 px-3 py-1 font-semibold text-white transition hover:bg-teal-400">Empezar</button>
+              <button type="button" data-action="move-daily" data-task-id="${escapeHtml(id)}" class="rounded-full bg-fuchsia-500/15 px-3 py-1 text-fuchsia-100 transition hover:bg-fuchsia-500/25">Diaria</button>
               <button type="button" data-action="move-done" data-task-id="${escapeHtml(id)}" class="rounded-full bg-white/5 px-3 py-1 text-slate-300 transition hover:bg-white/10">Completar</button>
               <button type="button" data-action="toggle-edit" data-task-id="${escapeHtml(id)}" class="rounded-full bg-cyan-500/15 px-3 py-1 text-cyan-100 transition hover:bg-cyan-500/25">Editar</button>
               <button type="button" data-action="delete-task" data-task-id="${escapeHtml(id)}" class="rounded-full bg-rose-500/15 px-3 py-1 text-rose-200 transition hover:bg-rose-500/25">Eliminar</button>
@@ -748,6 +791,7 @@
           return `
             <div class="mt-3 flex flex-wrap gap-2 text-xs">
               <button type="button" data-action="move-backlog" data-task-id="${escapeHtml(id)}" class="rounded-full bg-white/5 px-3 py-1 text-slate-300 transition hover:bg-white/10">Volver</button>
+              <button type="button" data-action="move-daily" data-task-id="${escapeHtml(id)}" class="rounded-full bg-fuchsia-500/15 px-3 py-1 text-fuchsia-100 transition hover:bg-fuchsia-500/25">Diaria</button>
               <button type="button" data-action="move-done" data-task-id="${escapeHtml(id)}" class="rounded-full bg-emerald-500 px-3 py-1 font-semibold text-white transition hover:bg-emerald-400">Completar</button>
               <button type="button" data-action="toggle-edit" data-task-id="${escapeHtml(id)}" class="rounded-full bg-cyan-500/15 px-3 py-1 text-cyan-100 transition hover:bg-cyan-500/25">Editar</button>
               <button type="button" data-action="delete-task" data-task-id="${escapeHtml(id)}" class="rounded-full bg-rose-500/15 px-3 py-1 text-rose-200 transition hover:bg-rose-500/25">Eliminar</button>
@@ -758,6 +802,7 @@
         return `
           <div class="mt-3 flex flex-wrap gap-2 text-xs">
             <button type="button" data-action="move-backlog" data-task-id="${escapeHtml(id)}" class="rounded-full bg-white/5 px-3 py-1 text-slate-300 transition hover:bg-white/10">Reabrir</button>
+            <button type="button" data-action="move-daily" data-task-id="${escapeHtml(id)}" class="rounded-full bg-fuchsia-500/15 px-3 py-1 text-fuchsia-100 transition hover:bg-fuchsia-500/25">Diaria</button>
             <button type="button" data-action="toggle-edit" data-task-id="${escapeHtml(id)}" class="rounded-full bg-cyan-500/15 px-3 py-1 text-cyan-100 transition hover:bg-cyan-500/25">Editar</button>
             <button type="button" data-action="delete-task" data-task-id="${escapeHtml(id)}" class="rounded-full bg-rose-500/15 px-3 py-1 text-rose-200 transition hover:bg-rose-500/25">Eliminar</button>
           </div>
@@ -832,7 +877,9 @@
       function renderCard(task, column, index) {
         const id = taskId(task);
         const meta = topicMeta(task.topic);
-        const positionLabel = column === 'backlog' ? `Pendiente #${index + 1}` : (column === 'in_progress' ? 'En progreso' : 'Completada');
+        const positionLabel = column === 'backlog'
+          ? `Pendiente #${index + 1}`
+          : (column === 'daily' ? `Diaria #${index + 1}` : (column === 'in_progress' ? 'En progreso' : 'Completada'));
         return `
           <article data-task-id="${escapeHtml(id)}" class="task-card cursor-grab select-none rounded-2xl border ${meta.border} bg-gradient-to-br from-slate-900/90 via-slate-900/75 to-slate-800/65 p-3 shadow-lg hover:border-cyan-300/40 active:cursor-grabbing">
             <div class="flex items-start gap-3">
@@ -1002,6 +1049,7 @@
           boardState[column] = boardState[column].filter((taskKey) => taskKey !== id);
         });
 
+        if (targetColumn === 'daily') boardState.daily.unshift(id);
         if (targetColumn === 'backlog') boardState.backlog.push(id);
         if (targetColumn === 'in_progress') boardState.in_progress.unshift(id);
         if (targetColumn === 'done') boardState.done.unshift(id);
@@ -1048,7 +1096,7 @@
               '3. Empieza otra vez con una sola tarea.'
             ]
           };
-          boardState = { backlog: [], in_progress: [], done: [] };
+          boardState = emptyBoardState();
           summaryText.textContent = currentPlan.summary;
         }
 
@@ -1125,21 +1173,24 @@
 
       function initSortables() {
         destroySortables();
-        [backlogList, progressList, doneList].forEach((element) => {
+        [dailyList, backlogList, progressList, doneList].forEach((element) => {
           sortables.push(
             Sortable.create(element, {
               group: 'chaos-board',
-              animation: 170,
+              animation: 120,
               draggable: '.task-card',
               scroll: true,
               bubbleScroll: true,
               forceAutoScrollFallback: true,
-              scrollSensitivity: 120,
-              scrollSpeed: 18,
+              scrollSensitivity: 150,
+              scrollSpeed: 14,
               fallbackOnBody: true,
               delayOnTouchOnly: true,
-              delay: 80,
-              emptyInsertThreshold: 160,
+              delay: 50,
+              emptyInsertThreshold: 260,
+              swapThreshold: 0.45,
+              invertedSwapThreshold: 0.85,
+              invertSwap: true,
               setData(dataTransfer, dragEl) {
                 dataTransfer.setData('text/plain', dragEl.dataset.taskId || '');
               },
@@ -1175,6 +1226,10 @@
             const action = button.dataset.action;
             const id = button.dataset.taskId;
             if (!action || !id) return;
+            if (action === 'move-daily') {
+              moveTaskToColumn(id, 'daily');
+              return;
+            }
             if (action === 'move-backlog') {
               moveTaskToColumn(id, 'backlog');
               return;
@@ -1207,6 +1262,7 @@
       }
 
       function renderBoard() {
+        renderColumn('daily', dailyList);
         renderColumn('backlog', backlogList);
         renderColumn('in_progress', progressList);
         renderColumn('done', doneList);
@@ -1258,7 +1314,7 @@
         });
         currentPlan = emptyPlan;
         initialCoach = emptyPlan.coach;
-        boardState = { backlog: [], in_progress: [], done: [] };
+        boardState = emptyBoardState();
         deriveStatusFromColumns();
         currentFilter = 'all';
         hasInteracted = true;
