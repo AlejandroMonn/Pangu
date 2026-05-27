@@ -434,6 +434,7 @@
       let weeklyRoutine = {};
       let hasInteracted = false;
       let sortables = [];
+      let todayRoutineSortable = null;
       let activeDropColumn = null;
       let localTaskCounter = 0;
       let isBoardDragging = false;
@@ -672,6 +673,10 @@
         }, {});
       }
 
+      function normalizeRoutineMatch(value) {
+        return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+      }
+
       function hydrateRoutineTask(task) {
         const title = String(task.title || '').trim().replace(/\s+/g, ' ');
         return {
@@ -686,17 +691,41 @@
         };
       }
 
+      function ensureRoutineDayDefaults(dayKey) {
+        if (!WEEK_DAYS.some((day) => day.key === dayKey)) return;
+        const defaults = defaultWeeklyRoutine()[dayKey] || [];
+        const current = Array.isArray(weeklyRoutine[dayKey]) ? weeklyRoutine[dayKey].map((task) => hydrateRoutineTask(task)) : [];
+        const currentIds = new Set(current.map((task) => task.id));
+        const currentTitles = new Set(current.map((task) => normalizeRoutineMatch(task.title)));
+        const missingDefaults = defaults.filter((task) => {
+          return !currentIds.has(task.id) && !currentTitles.has(normalizeRoutineMatch(task.title));
+        });
+
+        if (missingDefaults.length || current.length !== (weeklyRoutine[dayKey] || []).length) {
+          weeklyRoutine[dayKey] = [...missingDefaults, ...current];
+          saveWeeklyRoutine();
+        }
+      }
+
+      function ensureAllRoutineDefaults() {
+        WEEK_DAYS.forEach((day) => ensureRoutineDayDefaults(day.key));
+      }
+
       function mergeRoutineDefaults(storedRoutine) {
         const nextRoutine = defaultWeeklyRoutine();
         WEEK_DAYS.forEach((day) => {
           const storedTasks = Array.isArray(storedRoutine[day.key]) ? storedRoutine[day.key] : [];
           const defaultsById = new Map(nextRoutine[day.key].map((task) => [task.id, task]));
+          const defaultsByTitle = new Map(nextRoutine[day.key].map((task) => [normalizeRoutineMatch(task.title), task]));
           const storedHydrated = storedTasks
             .map((task) => hydrateRoutineTask(task))
             .filter((task) => task.title);
           storedHydrated.forEach((task) => {
             if (defaultsById.has(task.id)) {
               Object.assign(defaultsById.get(task.id), task, { mandatory: defaultsById.get(task.id).mandatory || task.mandatory });
+            } else if (defaultsByTitle.has(normalizeRoutineMatch(task.title))) {
+              const matched = defaultsByTitle.get(normalizeRoutineMatch(task.title));
+              Object.assign(matched, task, { id: matched.id, mandatory: matched.mandatory || task.mandatory });
             } else {
               nextRoutine[day.key].push(task);
             }
@@ -709,9 +738,11 @@
         try {
           const stored = JSON.parse(localStorage.getItem(WEEKLY_ROUTINE_STORAGE_KEY) || '{}');
           weeklyRoutine = mergeRoutineDefaults(stored);
+          ensureAllRoutineDefaults();
           saveWeeklyRoutine();
         } catch (error) {
           weeklyRoutine = defaultWeeklyRoutine();
+          ensureAllRoutineDefaults();
           saveWeeklyRoutine();
         }
       }
@@ -744,6 +775,7 @@
       }
 
       function renderRoutineEditor() {
+        ensureRoutineDayDefaults(selectedRoutineDay);
         const tasks = weeklyRoutine[selectedRoutineDay] || [];
         routineEditorList.innerHTML = tasks.length
           ? tasks.map((task) => renderRoutineEditorCard(task)).join('')
@@ -873,8 +905,52 @@
         setRoutineMessage(`"${nextTitle}" fue actualizada.`);
       }
 
+      function destroyTodayRoutineSortable() {
+        if (todayRoutineSortable) {
+          todayRoutineSortable.destroy();
+          todayRoutineSortable = null;
+        }
+      }
+
+      function routineDomIds(element) {
+        return Array.from(element.children)
+          .map((child) => child.dataset.routineId)
+          .filter(Boolean);
+      }
+
+      function handleTodayRoutineSort() {
+        const todayKey = todayRoutineDayKey();
+        const orderedIds = routineDomIds(todayRoutineList);
+        const tasksById = new Map((weeklyRoutine[todayKey] || []).map((task) => [task.id, task]));
+        const orderedTasks = orderedIds.map((id) => tasksById.get(id)).filter(Boolean);
+        const missingTasks = (weeklyRoutine[todayKey] || []).filter((task) => !orderedIds.includes(task.id));
+        weeklyRoutine[todayKey] = [...orderedTasks, ...missingTasks];
+        saveWeeklyRoutine();
+        syncTodayRoutineBoardOrder();
+        renderRoutineEditor();
+        renderTodayRoutine();
+        ensureTodayRoutineOnBoard();
+      }
+
+      function initTodayRoutineSortable() {
+        destroyTodayRoutineSortable();
+        if (!todayRoutineList.children.length || !window.Sortable) return;
+        todayRoutineSortable = Sortable.create(todayRoutineList, {
+          animation: 120,
+          draggable: '[data-routine-id]',
+          handle: '[data-routine-drag]',
+          ghostClass: 'sortable-ghost',
+          chosenClass: 'sortable-chosen',
+          dragClass: 'sortable-drag',
+          filter: 'button,input,label,[data-no-drag],[data-no-drag] *',
+          preventOnFilter: false,
+          onEnd: handleTodayRoutineSort
+        });
+      }
+
       function renderTodayRoutine() {
         const todayKey = todayRoutineDayKey();
+        ensureRoutineDayDefaults(todayKey);
         const tasks = weeklyRoutine[todayKey] || [];
         const doneState = loadTodayRoutineDone();
         const doneCount = tasks.filter((task) => doneState[task.id]).length;
@@ -886,15 +962,16 @@
               const checked = doneState[task.id] ? 'checked' : '';
               const textClass = doneState[task.id] ? 'text-slate-500 line-through' : 'text-slate-100';
               return `
-                <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm">
-                  <label class="flex items-start gap-3">
+                <div data-routine-id="${escapeHtml(task.id)}" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm transition hover:border-fuchsia-300/30">
+                  <div class="flex items-start gap-3">
+                    <button type="button" data-routine-drag class="mt-0.5 cursor-grab rounded-lg border border-fuchsia-300/20 bg-fuchsia-300/10 px-2 py-1 text-[11px] text-fuchsia-100 transition hover:bg-fuchsia-300/15 active:cursor-grabbing" aria-label="Arrastrar rutina">⋮⋮</button>
                     <input type="checkbox" data-routine-check="${escapeHtml(task.id)}" ${checked} class="mt-1 h-4 w-4 rounded border-white/20 bg-slate-950 text-fuchsia-400 focus:ring-fuchsia-300" />
                     <span class="min-w-0 flex-1 break-words ${textClass}">
                       ${escapeHtml(task.title)}
                       <span class="mt-1 block text-xs text-slate-400">${task.estimated_minutes} min · ${escapeHtml(task.topic)}${task.mandatory ? ' · obligatoria' : ''}</span>
                     </span>
-                  </label>
-                  <button type="button" data-routine-add-today="${escapeHtml(task.id)}" class="ml-7 mt-2 rounded-full bg-cyan-500/15 px-3 py-1 text-xs text-cyan-100 transition hover:bg-cyan-500/25">Agregar al tablero</button>
+                  </div>
+                  <button type="button" data-routine-add-today="${escapeHtml(task.id)}" class="ml-20 mt-2 rounded-full bg-cyan-500/15 px-3 py-1 text-xs text-cyan-100 transition hover:bg-cyan-500/25">Agregar al tablero</button>
                 </div>
               `;
             }).join('')
@@ -914,6 +991,8 @@
             addRoutineItemsToBoard([button.dataset.routineAddToday], todayKey);
           });
         });
+
+        initTodayRoutineSortable();
       }
 
       function renderRoutinePanel() {
@@ -1733,7 +1812,7 @@
         const highestStep = currentPlan.tasks.reduce((max, task) => Math.max(max, Number(task.step_number) || 0), 0);
         const dayLabel = routineDayLabel(dayKey);
         return hydrateTask({
-          client_id: `routine-board:${todayDateKey()}:${routineTask.id}`,
+          client_id: routineBoardTaskId(routineTask.id),
           step_number: highestStep + indexOffset + 1,
           title: routineTask.title,
           details: `${routineTask.details || routineTask.title} (${dayLabel})`,
@@ -1747,6 +1826,27 @@
             : `Rutina programada para ${dayLabel}.`,
           lane: 'suggested'
         }, highestStep + indexOffset);
+      }
+
+      function routineBoardTaskId(routineTaskId) {
+        return `routine-board:${todayDateKey()}:${routineTaskId}`;
+      }
+
+      function syncTodayRoutineBoardOrder() {
+        if (!currentPlan) return;
+        const todayKey = todayRoutineDayKey();
+        const orderedBoardIds = (weeklyRoutine[todayKey] || []).map((task) => routineBoardTaskId(task.id));
+        const routineIdSet = new Set(orderedBoardIds);
+
+        BOARD_COLUMNS.forEach((column) => {
+          const columnRoutineIds = orderedBoardIds.filter((id) => boardState[column].includes(id));
+          if (!columnRoutineIds.length) return;
+          const nonRoutineIds = boardState[column].filter((id) => !routineIdSet.has(id));
+          boardState[column] = [...columnRoutineIds, ...nonRoutineIds];
+        });
+
+        deriveStatusFromColumns();
+        persistState();
       }
 
       function addRoutineItemsToBoard(routineIds, dayKey) {
@@ -1773,6 +1873,7 @@
         setTaskMap(currentPlan.tasks);
         boardState.backlog = dedupe([...newTasks.map((task) => taskId(task)), ...boardState.backlog]);
         deriveStatusFromColumns();
+        if (dayKey === todayRoutineDayKey()) syncTodayRoutineBoardOrder();
         hasInteracted = true;
         persistState();
         renderPlan();
