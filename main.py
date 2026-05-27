@@ -593,7 +593,14 @@ def _generate_with_ollama(user_prompt: str) -> tuple[str, str]:
 
 @app.get("/")
 async def home() -> FileResponse:
-    return FileResponse(BASE_DIR / "templates" / "index.html")
+    return FileResponse(
+        BASE_DIR / "templates" / "index.html",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 @app.get("/api/health")
