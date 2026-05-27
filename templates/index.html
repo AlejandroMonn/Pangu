@@ -239,7 +239,7 @@
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 class="text-sm font-semibold text-white">Rutina Semanal</h3>
-                <p class="mt-1 text-xs text-slate-400">Programa hábitos por día. La rutina de hoy aparece aquí al abrir una nueva sesión.</p>
+                <p class="mt-1 text-xs text-slate-400">Programa hábitos por día. Lo obligatorio queda todos los días y la rutina de hoy puede pasar al tablero.</p>
               </div>
               <span id="todayRoutineCount" class="rounded-full border border-fuchsia-300/20 bg-fuchsia-300/10 px-3 py-1 text-[11px] text-fuchsia-100">0 hoy</span>
             </div>
@@ -254,7 +254,7 @@
                   <input
                     id="routineTaskInput"
                     type="text"
-                    placeholder="Ejemplo: limpiar cuarto, ejercicio, revisar agenda"
+                    placeholder="Ejemplo: leer 20 min, movilidad, revisar agenda"
                     class="min-w-0 rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 placeholder-slate-500 outline-none transition focus:border-fuchsia-300/60"
                   />
                 </div>
@@ -272,6 +272,13 @@
               <div class="rounded-2xl border border-fuchsia-300/20 bg-black/15 p-4">
                 <p class="text-[11px] uppercase tracking-[0.18em] text-fuchsia-100">Rutina de hoy</p>
                 <h4 id="todayRoutineTitle" class="mt-1 text-lg font-semibold text-white"></h4>
+                <button
+                  id="addTodayRoutineToBoardBtn"
+                  type="button"
+                  class="mt-3 inline-flex items-center justify-center rounded-xl bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 active:scale-[0.99]"
+                >
+                  Pasar rutina de hoy al tablero
+                </button>
                 <div id="todayRoutineList" class="mt-4 space-y-2"></div>
               </div>
             </div>
@@ -355,6 +362,23 @@
         { key: 'saturday', label: 'Sábado' },
         { key: 'sunday', label: 'Domingo' }
       ];
+      const DAILY_MANDATORY_ROUTINES = [
+        { id: 'daily-postura', title: 'Rutina de postura', estimated_minutes: 12, energy_level: 'light', topic: 'Rutina diaria', details: 'Bloque obligatorio de postura para resetear el cuerpo.', first_move: 'Abrir espacio y empezar movilidad suave.' },
+        { id: 'daily-cuarto', title: 'Organizar cuarto', estimated_minutes: 15, energy_level: 'light', topic: 'Rutina diaria', details: 'Orden mínimo del cuarto para bajar ruido visual.', first_move: 'Recoger lo visible por 5 minutos.' },
+        { id: 'daily-desayuno', title: 'Desayunar', estimated_minutes: 20, energy_level: 'light', topic: 'Comida', details: 'Primera comida del día.', first_move: 'Preparar algo simple y tomar agua.' },
+        { id: 'daily-almuerzo', title: 'Almorzar', estimated_minutes: 30, energy_level: 'light', topic: 'Comida', details: 'Comida principal para sostener energía.', first_move: 'Definir qué vas a comer.' },
+        { id: 'daily-cena', title: 'Cena', estimated_minutes: 25, energy_level: 'light', topic: 'Comida', details: 'Cerrar el día comiendo sin saltártelo.', first_move: 'Preparar o elegir la cena.' },
+        { id: 'daily-limpieza-manana', title: 'Limpieza mañana', estimated_minutes: 10, energy_level: 'light', topic: 'Rutina diaria', details: 'Limpieza rápida de arranque.', first_move: 'Limpiar una superficie visible.' },
+        { id: 'daily-limpieza-noche', title: 'Limpieza noche', estimated_minutes: 10, energy_level: 'light', topic: 'Rutina diaria', details: 'Cierre mínimo para despertar con menos caos.', first_move: 'Guardar lo que esté fuera de lugar.' },
+        { id: 'daily-banarme', title: 'Bañarme', estimated_minutes: 20, energy_level: 'light', topic: 'Cuidado personal', details: 'Higiene diaria obligatoria.', first_move: 'Preparar toalla y ropa.' }
+      ];
+      const WEEKLY_WORKOUT_ROUTINES = {
+        monday: { id: 'workout-monday-push', title: 'Ejercicios de entreno: Push', estimated_minutes: 60, energy_level: 'deep', topic: 'Entreno', details: 'Pecho, hombro y tríceps.', first_move: 'Preparar agua y calentar hombros.' },
+        tuesday: { id: 'workout-tuesday-pull', title: 'Ejercicios de entreno: Pull', estimated_minutes: 60, energy_level: 'deep', topic: 'Entreno', details: 'Espalda, bíceps y tirón controlado.', first_move: 'Preparar agarres y calentar espalda.' },
+        wednesday: { id: 'workout-wednesday-vshape', title: 'Ejercicios de entreno: V-Shape Boost + Antebrazos', estimated_minutes: 60, energy_level: 'deep', topic: 'Entreno', details: 'Énfasis en dorsales, hombro lateral y antebrazos.', first_move: 'Hacer movilidad de hombros y muñecas.' },
+        thursday: { id: 'workout-thursday-legs-core', title: 'Ejercicios de entreno: Piernas + Core', estimated_minutes: 65, energy_level: 'deep', topic: 'Entreno', details: 'Piernas completas y abdomen.', first_move: 'Calentar cadera, rodillas y tobillos.' },
+        friday: { id: 'workout-friday-fullbody', title: 'Ejercicios de entreno: Full Body', estimated_minutes: 60, energy_level: 'deep', topic: 'Entreno', details: 'Sesión general de cuerpo completo.', first_move: 'Hacer calentamiento general de 5 minutos.' }
+      };
 
       const URGENCY_STYLE = {
         high: 'bg-rose-500/15 text-rose-200 border-rose-400/30',
@@ -394,6 +418,7 @@
       const todayRoutineTitle = document.getElementById('todayRoutineTitle');
       const todayRoutineList = document.getElementById('todayRoutineList');
       const todayRoutineCount = document.getElementById('todayRoutineCount');
+      const addTodayRoutineToBoardBtn = document.getElementById('addTodayRoutineToBoardBtn');
 
       const WORKSPACE_STORAGE_KEY = 'chaos-triage:workspace:v1';
       const WEEKLY_ROUTINE_STORAGE_KEY = 'pangu:weekly-routine:v1';
@@ -638,27 +663,56 @@
 
       function defaultWeeklyRoutine() {
         return WEEK_DAYS.reduce((routine, day) => {
-          routine[day.key] = [];
+          const workout = WEEKLY_WORKOUT_ROUTINES[day.key];
+          routine[day.key] = [
+            ...DAILY_MANDATORY_ROUTINES.map((task) => hydrateRoutineTask({ ...task, mandatory: true })),
+            ...(workout ? [hydrateRoutineTask(workout)] : [])
+          ];
           return routine;
         }, {});
+      }
+
+      function hydrateRoutineTask(task) {
+        const title = String(task.title || '').trim().replace(/\s+/g, ' ');
+        return {
+          id: String(task.id || nextRoutineId()),
+          title,
+          details: String(task.details || title || 'Rutina programada.').trim(),
+          first_move: String(task.first_move || title || 'Empezar con un paso pequeño.').trim(),
+          topic: normalizeTopicText(task.topic || 'Rutina'),
+          estimated_minutes: Math.max(5, Number(task.estimated_minutes) || 20),
+          energy_level: String(task.energy_level || 'medium').trim().toLowerCase() || 'medium',
+          mandatory: Boolean(task.mandatory)
+        };
+      }
+
+      function mergeRoutineDefaults(storedRoutine) {
+        const nextRoutine = defaultWeeklyRoutine();
+        WEEK_DAYS.forEach((day) => {
+          const storedTasks = Array.isArray(storedRoutine[day.key]) ? storedRoutine[day.key] : [];
+          const defaultsById = new Map(nextRoutine[day.key].map((task) => [task.id, task]));
+          const storedHydrated = storedTasks
+            .map((task) => hydrateRoutineTask(task))
+            .filter((task) => task.title);
+          storedHydrated.forEach((task) => {
+            if (defaultsById.has(task.id)) {
+              Object.assign(defaultsById.get(task.id), task, { mandatory: defaultsById.get(task.id).mandatory || task.mandatory });
+            } else {
+              nextRoutine[day.key].push(task);
+            }
+          });
+        });
+        return nextRoutine;
       }
 
       function loadWeeklyRoutine() {
         try {
           const stored = JSON.parse(localStorage.getItem(WEEKLY_ROUTINE_STORAGE_KEY) || '{}');
-          const nextRoutine = defaultWeeklyRoutine();
-          WEEK_DAYS.forEach((day) => {
-            const tasks = Array.isArray(stored[day.key]) ? stored[day.key] : [];
-            nextRoutine[day.key] = tasks
-              .map((task) => ({
-                id: String(task.id || nextRoutineId()),
-                title: String(task.title || '').trim()
-              }))
-              .filter((task) => task.title);
-          });
-          weeklyRoutine = nextRoutine;
+          weeklyRoutine = mergeRoutineDefaults(stored);
+          saveWeeklyRoutine();
         } catch (error) {
           weeklyRoutine = defaultWeeklyRoutine();
+          saveWeeklyRoutine();
         }
       }
 
@@ -692,23 +746,131 @@
       function renderRoutineEditor() {
         const tasks = weeklyRoutine[selectedRoutineDay] || [];
         routineEditorList.innerHTML = tasks.length
-          ? tasks.map((task) => `
-              <div class="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm">
-                <span class="min-w-0 break-words text-slate-100">${escapeHtml(task.title)}</span>
-                <button type="button" data-routine-delete="${escapeHtml(task.id)}" class="shrink-0 rounded-full bg-rose-500/15 px-3 py-1 text-xs text-rose-200 transition hover:bg-rose-500/25">Eliminar</button>
-              </div>
-            `).join('')
+          ? tasks.map((task) => renderRoutineEditorCard(task)).join('')
           : '<div class="rounded-xl border border-dashed border-white/10 px-3 py-3 text-sm text-slate-500">Sin rutina programada para este día.</div>';
+
+        routineEditorList.querySelectorAll('[data-routine-toggle-edit]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const form = routineEditorList.querySelector(`[data-routine-edit-form="${CSS.escape(button.dataset.routineToggleEdit)}"]`);
+            form?.classList.toggle('hidden');
+          });
+        });
+
+        routineEditorList.querySelectorAll('[data-routine-save]').forEach((button) => {
+          button.addEventListener('click', () => {
+            saveRoutineEdits(button.dataset.routineSave);
+          });
+        });
+
+        routineEditorList.querySelectorAll('[data-routine-add-board]').forEach((button) => {
+          button.addEventListener('click', () => {
+            addRoutineItemsToBoard([button.dataset.routineAddBoard], selectedRoutineDay);
+          });
+        });
 
         routineEditorList.querySelectorAll('[data-routine-delete]').forEach((button) => {
           button.addEventListener('click', () => {
             const id = button.dataset.routineDelete;
+            const task = (weeklyRoutine[selectedRoutineDay] || []).find((item) => item.id === id);
+            if (task?.mandatory) {
+              setRoutineMessage('Esta rutina es obligatoria todos los días. Puedes editarla, pero no eliminarla.', 'error');
+              return;
+            }
             weeklyRoutine[selectedRoutineDay] = (weeklyRoutine[selectedRoutineDay] || []).filter((task) => task.id !== id);
             saveWeeklyRoutine();
             renderRoutinePanel();
             setRoutineMessage('Rutina eliminada.');
           });
         });
+      }
+
+      function renderRoutineEditorCard(task) {
+        const lockedClass = task.mandatory ? 'opacity-50 cursor-not-allowed' : 'hover:bg-rose-500/25';
+        return `
+          <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="min-w-0 break-words font-semibold text-slate-100">${escapeHtml(task.title)}</span>
+                  ${task.mandatory ? '<span class="rounded-full border border-fuchsia-300/25 bg-fuchsia-300/10 px-2 py-0.5 text-[10px] text-fuchsia-100">Obligatoria</span>' : ''}
+                </div>
+                <div class="mt-2 flex flex-wrap gap-2 text-xs text-slate-300">
+                  <span class="rounded-full bg-black/20 px-3 py-1">${escapeHtml(task.topic)}</span>
+                  <span class="rounded-full bg-black/20 px-3 py-1">${task.estimated_minutes} min</span>
+                  <span class="rounded-full bg-black/20 px-3 py-1">${escapeHtml(task.energy_level)} energía</span>
+                </div>
+              </div>
+              <div class="flex shrink-0 flex-wrap gap-2 text-xs">
+                <button type="button" data-routine-add-board="${escapeHtml(task.id)}" class="rounded-full bg-cyan-500/15 px-3 py-1 text-cyan-100 transition hover:bg-cyan-500/25">Al tablero</button>
+                <button type="button" data-routine-toggle-edit="${escapeHtml(task.id)}" class="rounded-full bg-fuchsia-500/15 px-3 py-1 text-fuchsia-100 transition hover:bg-fuchsia-500/25">Editar</button>
+                <button type="button" data-routine-delete="${escapeHtml(task.id)}" class="rounded-full bg-rose-500/15 px-3 py-1 text-rose-200 transition ${lockedClass}">Eliminar</button>
+              </div>
+            </div>
+            ${renderRoutineEditForm(task)}
+          </div>
+        `;
+      }
+
+      function renderRoutineEditForm(task) {
+        return `
+          <form class="mt-3 hidden rounded-xl border border-fuchsia-300/20 bg-fuchsia-300/5 p-3" data-routine-edit-form="${escapeHtml(task.id)}">
+            <label class="block text-[10px] uppercase tracking-[0.16em] text-slate-500">
+              Nombre
+              <textarea data-routine-field="title" rows="2" class="mt-1 w-full resize-y rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm normal-case tracking-normal text-white outline-none transition focus:border-fuchsia-300/60">${escapeHtml(task.title)}</textarea>
+            </label>
+            <div class="mt-3 grid gap-3 sm:grid-cols-[1fr_5rem]">
+              <label class="block text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                Tema
+                <input data-routine-field="topic" value="${escapeHtml(task.topic)}" class="mt-1 w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-xs normal-case tracking-normal text-white outline-none transition focus:border-fuchsia-300/60" />
+              </label>
+              <label class="block text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                Min
+                <input data-routine-field="estimated_minutes" type="number" min="5" step="5" value="${escapeHtml(task.estimated_minutes)}" class="mt-1 w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-xs normal-case tracking-normal text-white outline-none transition focus:border-fuchsia-300/60" />
+              </label>
+            </div>
+            <label class="mt-3 block text-[10px] uppercase tracking-[0.16em] text-slate-500">
+              Energía
+              <select data-routine-field="energy_level" class="mt-1 w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-xs normal-case tracking-normal text-white outline-none transition focus:border-fuchsia-300/60">
+                <option value="light" ${task.energy_level === 'light' ? 'selected' : ''}>light</option>
+                <option value="medium" ${task.energy_level === 'medium' ? 'selected' : ''}>medium</option>
+                <option value="deep" ${task.energy_level === 'deep' ? 'selected' : ''}>deep</option>
+              </select>
+            </label>
+            <label class="mt-3 block text-[10px] uppercase tracking-[0.16em] text-slate-500">
+              Descripción
+              <textarea data-routine-field="details" rows="3" class="mt-1 w-full resize-y rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-xs normal-case tracking-normal text-white outline-none transition focus:border-fuchsia-300/60">${escapeHtml(task.details || '')}</textarea>
+            </label>
+            <label class="mt-3 block text-[10px] uppercase tracking-[0.16em] text-slate-500">
+              Primer paso
+              <textarea data-routine-field="first_move" rows="2" class="mt-1 w-full resize-y rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-xs normal-case tracking-normal text-white outline-none transition focus:border-fuchsia-300/60">${escapeHtml(task.first_move || '')}</textarea>
+            </label>
+            <button type="button" data-routine-save="${escapeHtml(task.id)}" class="mt-3 rounded-full bg-fuchsia-400 px-3 py-1 text-xs font-semibold text-slate-950 transition hover:bg-fuchsia-300">Guardar rutina</button>
+          </form>
+        `;
+      }
+
+      function routineFieldValue(form, fieldName) {
+        return String(form.querySelector(`[data-routine-field="${fieldName}"]`)?.value || '').trim();
+      }
+
+      function saveRoutineEdits(id) {
+        const form = routineEditorList.querySelector(`[data-routine-edit-form="${CSS.escape(id)}"]`);
+        const task = (weeklyRoutine[selectedRoutineDay] || []).find((item) => item.id === id);
+        if (!form || !task) return;
+        const nextTitle = routineFieldValue(form, 'title').replace(/\s+/g, ' ');
+        if (!nextTitle) {
+          setRoutineMessage('El nombre de la rutina no puede quedar vacío.', 'error');
+          return;
+        }
+        task.title = nextTitle;
+        task.topic = normalizeTopicText(routineFieldValue(form, 'topic'));
+        task.estimated_minutes = Math.max(5, Number(routineFieldValue(form, 'estimated_minutes')) || 20);
+        task.energy_level = routineFieldValue(form, 'energy_level') || 'medium';
+        task.details = routineFieldValue(form, 'details') || nextTitle;
+        task.first_move = routineFieldValue(form, 'first_move') || nextTitle;
+        saveWeeklyRoutine();
+        renderRoutinePanel();
+        setRoutineMessage(`"${nextTitle}" fue actualizada.`);
       }
 
       function renderTodayRoutine() {
@@ -724,10 +886,16 @@
               const checked = doneState[task.id] ? 'checked' : '';
               const textClass = doneState[task.id] ? 'text-slate-500 line-through' : 'text-slate-100';
               return `
-                <label class="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm">
-                  <input type="checkbox" data-routine-check="${escapeHtml(task.id)}" ${checked} class="mt-1 h-4 w-4 rounded border-white/20 bg-slate-950 text-fuchsia-400 focus:ring-fuchsia-300" />
-                  <span class="min-w-0 break-words ${textClass}">${escapeHtml(task.title)}</span>
-                </label>
+                <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm">
+                  <label class="flex items-start gap-3">
+                    <input type="checkbox" data-routine-check="${escapeHtml(task.id)}" ${checked} class="mt-1 h-4 w-4 rounded border-white/20 bg-slate-950 text-fuchsia-400 focus:ring-fuchsia-300" />
+                    <span class="min-w-0 flex-1 break-words ${textClass}">
+                      ${escapeHtml(task.title)}
+                      <span class="mt-1 block text-xs text-slate-400">${task.estimated_minutes} min · ${escapeHtml(task.topic)}${task.mandatory ? ' · obligatoria' : ''}</span>
+                    </span>
+                  </label>
+                  <button type="button" data-routine-add-today="${escapeHtml(task.id)}" class="ml-7 mt-2 rounded-full bg-cyan-500/15 px-3 py-1 text-xs text-cyan-100 transition hover:bg-cyan-500/25">Agregar al tablero</button>
+                </div>
               `;
             }).join('')
           : '<div class="rounded-xl border border-dashed border-white/10 px-3 py-3 text-sm text-slate-500">No hay rutina programada para hoy.</div>';
@@ -738,6 +906,12 @@
             nextDoneState[checkbox.dataset.routineCheck] = checkbox.checked;
             saveTodayRoutineDone(nextDoneState);
             renderTodayRoutine();
+          });
+        });
+
+        todayRoutineList.querySelectorAll('[data-routine-add-today]').forEach((button) => {
+          button.addEventListener('click', () => {
+            addRoutineItemsToBoard([button.dataset.routineAddToday], todayKey);
           });
         });
       }
@@ -763,7 +937,15 @@
 
         weeklyRoutine[selectedRoutineDay] = [
           ...(weeklyRoutine[selectedRoutineDay] || []),
-          ...entries.map((title) => ({ id: nextRoutineId(), title }))
+          ...entries.map((title) => hydrateRoutineTask({
+            id: nextRoutineId(),
+            title,
+            details: title,
+            first_move: title,
+            topic: 'Rutina',
+            estimated_minutes: 20,
+            energy_level: 'medium'
+          }))
         ];
         saveWeeklyRoutine();
         routineTaskInput.value = '';
@@ -1543,6 +1725,69 @@
         }, highestStep + indexOffset);
       }
 
+      function createRoutineBoardTask(routineTask, dayKey, indexOffset) {
+        const highestStep = currentPlan.tasks.reduce((max, task) => Math.max(max, Number(task.step_number) || 0), 0);
+        const dayLabel = routineDayLabel(dayKey);
+        return hydrateTask({
+          client_id: `routine-board:${todayDateKey()}:${routineTask.id}`,
+          step_number: highestStep + indexOffset + 1,
+          title: routineTask.title,
+          details: `${routineTask.details || routineTask.title} (${dayLabel})`,
+          first_move: routineTask.first_move || routineTask.title,
+          topic: routineTask.topic || 'Rutina',
+          urgency: routineTask.mandatory ? 'high' : 'medium',
+          energy_level: routineTask.energy_level || 'medium',
+          estimated_minutes: routineTask.estimated_minutes || 20,
+          reason: routineTask.mandatory
+            ? 'Rutina obligatoria de todos los días.'
+            : `Rutina programada para ${dayLabel}.`,
+          lane: 'suggested'
+        }, highestStep + indexOffset);
+      }
+
+      function addRoutineItemsToBoard(routineIds, dayKey) {
+        const tasks = weeklyRoutine[dayKey] || [];
+        const selectedTasks = tasks.filter((task) => routineIds.includes(task.id));
+        if (!selectedTasks.length) {
+          setRoutineMessage('No encontré esa rutina para pasarla al tablero.', 'error');
+          return;
+        }
+
+        ensureWorkspaceExists();
+        const existingIds = new Set(currentPlan.tasks.map((task) => taskId(task)));
+        const newTasks = selectedTasks
+          .map((task, index) => createRoutineBoardTask(task, dayKey, index))
+          .filter((task) => !existingIds.has(taskId(task)));
+
+        if (!newTasks.length) {
+          setRoutineMessage('Esa rutina ya está en el tablero de hoy.', 'error');
+          return;
+        }
+
+        currentPlan.tasks = [...newTasks, ...currentPlan.tasks];
+        currentPlan.topics = uniqueTopics([...currentPlan.topics, ...newTasks.map((task) => task.topic)]);
+        setTaskMap(currentPlan.tasks);
+        boardState.backlog = dedupe([...newTasks.map((task) => taskId(task)), ...boardState.backlog]);
+        deriveStatusFromColumns();
+        hasInteracted = true;
+        persistState();
+        renderPlan();
+        renderRoutinePanel();
+        setRoutineMessage(newTasks.length === 1
+          ? 'Rutina agregada al tablero como tarea ajustable.'
+          : `${newTasks.length} rutinas agregadas al tablero como tareas ajustables.`);
+      }
+
+      function addTodayRoutineToBoard() {
+        const todayKey = todayRoutineDayKey();
+        const ids = (weeklyRoutine[todayKey] || []).map((task) => task.id);
+        if (!ids.length) {
+          setRoutineMessage('No hay rutina programada para hoy.', 'error');
+          return;
+        }
+        addRoutineItemsToBoard(ids, todayKey);
+      }
+
       function addQuickTasks() {
         const raw = quickTaskInput.value.trim();
         if (!raw) {
@@ -1624,6 +1869,7 @@
 
       organizeBtn.addEventListener('click', runTriage);
       quickAddBtn.addEventListener('click', addQuickTasks);
+      addTodayRoutineToBoardBtn.addEventListener('click', addTodayRoutineToBoard);
       quickTaskInput.addEventListener('input', clearQuickMessage);
       quickTaskInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
