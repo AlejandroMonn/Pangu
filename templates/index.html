@@ -435,6 +435,7 @@
       let hasInteracted = false;
       let sortables = [];
       let todayRoutineSortable = null;
+      let routineEditorSortable = null;
       let activeDropColumn = null;
       let localTaskCounter = 0;
       let isBoardDragging = false;
@@ -814,14 +815,18 @@
             setRoutineMessage('Rutina eliminada.');
           });
         });
+
+        initRoutineEditorSortable();
       }
 
       function renderRoutineEditorCard(task) {
         const lockedClass = task.mandatory ? 'opacity-50 cursor-not-allowed' : 'hover:bg-rose-500/25';
         return `
-          <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm">
+          <div data-routine-editor-id="${escapeHtml(task.id)}" class="rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm transition hover:border-fuchsia-300/30">
             <div class="flex flex-wrap items-start justify-between gap-3">
-              <div class="min-w-0">
+              <div class="flex min-w-0 flex-1 items-start gap-3">
+                <button type="button" data-routine-editor-drag class="mt-0.5 cursor-grab rounded-lg border border-fuchsia-300/20 bg-fuchsia-300/10 px-2 py-1 text-[11px] text-fuchsia-100 transition hover:bg-fuchsia-300/15 active:cursor-grabbing" aria-label="Arrastrar rutina">⋮⋮</button>
+                <div class="min-w-0">
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="min-w-0 break-words font-semibold text-slate-100">${escapeHtml(task.title)}</span>
                   ${task.mandatory ? '<span class="rounded-full border border-fuchsia-300/25 bg-fuchsia-300/10 px-2 py-0.5 text-[10px] text-fuchsia-100">Obligatoria</span>' : ''}
@@ -830,6 +835,7 @@
                   <span class="rounded-full bg-black/20 px-3 py-1">${escapeHtml(task.topic)}</span>
                   <span class="rounded-full bg-black/20 px-3 py-1">${task.estimated_minutes} min</span>
                   <span class="rounded-full bg-black/20 px-3 py-1">${escapeHtml(task.energy_level)} energía</span>
+                </div>
                 </div>
               </div>
               <div class="flex shrink-0 flex-wrap gap-2 text-xs">
@@ -883,6 +889,48 @@
 
       function routineFieldValue(form, fieldName) {
         return String(form.querySelector(`[data-routine-field="${fieldName}"]`)?.value || '').trim();
+      }
+
+      function destroyRoutineEditorSortable() {
+        if (routineEditorSortable) {
+          routineEditorSortable.destroy();
+          routineEditorSortable = null;
+        }
+      }
+
+      function routineEditorDomIds() {
+        return Array.from(routineEditorList.children)
+          .map((child) => child.dataset.routineEditorId)
+          .filter(Boolean);
+      }
+
+      function handleRoutineEditorSort() {
+        const orderedIds = routineEditorDomIds();
+        const tasksById = new Map((weeklyRoutine[selectedRoutineDay] || []).map((task) => [task.id, task]));
+        const orderedTasks = orderedIds.map((id) => tasksById.get(id)).filter(Boolean);
+        const missingTasks = (weeklyRoutine[selectedRoutineDay] || []).filter((task) => !orderedIds.includes(task.id));
+        weeklyRoutine[selectedRoutineDay] = [...orderedTasks, ...missingTasks];
+        saveWeeklyRoutine();
+        if (selectedRoutineDay === todayRoutineDayKey()) {
+          syncTodayRoutineBoardOrder();
+        }
+        renderRoutinePanel();
+      }
+
+      function initRoutineEditorSortable() {
+        destroyRoutineEditorSortable();
+        if (!routineEditorList.children.length || !window.Sortable) return;
+        routineEditorSortable = Sortable.create(routineEditorList, {
+          animation: 120,
+          draggable: '[data-routine-editor-id]',
+          handle: '[data-routine-editor-drag]',
+          ghostClass: 'sortable-ghost',
+          chosenClass: 'sortable-chosen',
+          dragClass: 'sortable-drag',
+          filter: 'button:not([data-routine-editor-drag]),input,textarea,select,[data-no-drag],[data-no-drag] *',
+          preventOnFilter: false,
+          onEnd: handleRoutineEditorSort
+        });
       }
 
       function saveRoutineEdits(id) {
@@ -942,7 +990,7 @@
           ghostClass: 'sortable-ghost',
           chosenClass: 'sortable-chosen',
           dragClass: 'sortable-drag',
-          filter: 'button,input,label,[data-no-drag],[data-no-drag] *',
+          filter: 'button:not([data-routine-drag]),input,label,[data-no-drag],[data-no-drag] *',
           preventOnFilter: false,
           onEnd: handleTodayRoutineSort
         });
