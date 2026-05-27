@@ -935,9 +935,7 @@
           return;
         }
 
-        weeklyRoutine[selectedRoutineDay] = [
-          ...(weeklyRoutine[selectedRoutineDay] || []),
-          ...entries.map((title) => hydrateRoutineTask({
+        const newRoutineTasks = entries.map((title) => hydrateRoutineTask({
             id: nextRoutineId(),
             title,
             details: title,
@@ -945,12 +943,18 @@
             topic: 'Rutina',
             estimated_minutes: 20,
             energy_level: 'medium'
-          }))
+          }));
+        weeklyRoutine[selectedRoutineDay] = [
+          ...(weeklyRoutine[selectedRoutineDay] || []),
+          ...newRoutineTasks
         ];
         saveWeeklyRoutine();
         routineTaskInput.value = '';
         clearRoutineMessage();
         renderRoutinePanel();
+        if (selectedRoutineDay === todayRoutineDayKey()) {
+          addRoutineItemsToBoard(newRoutineTasks.map((task) => task.id), selectedRoutineDay);
+        }
         setRoutineMessage(entries.length === 1 ? 'Rutina agregada.' : `${entries.length} rutinas agregadas.`);
       }
 
@@ -1788,6 +1792,29 @@
         addRoutineItemsToBoard(ids, todayKey);
       }
 
+      function ensureTodayRoutineOnBoard() {
+        const todayKey = todayRoutineDayKey();
+        const tasks = weeklyRoutine[todayKey] || [];
+        if (!tasks.length) return;
+
+        ensureWorkspaceExists();
+        const existingIds = new Set(currentPlan.tasks.map((task) => taskId(task)));
+        const missingRoutineTasks = tasks
+          .map((task, index) => createRoutineBoardTask(task, todayKey, index))
+          .filter((task) => !existingIds.has(taskId(task)));
+
+        if (!missingRoutineTasks.length) return;
+
+        currentPlan.tasks = [...missingRoutineTasks, ...currentPlan.tasks];
+        currentPlan.topics = uniqueTopics([...currentPlan.topics, ...missingRoutineTasks.map((task) => task.topic)]);
+        setTaskMap(currentPlan.tasks);
+        boardState.backlog = dedupe([...missingRoutineTasks.map((task) => taskId(task)), ...boardState.backlog]);
+        deriveStatusFromColumns();
+        hasInteracted = true;
+        persistState();
+        renderPlan();
+      }
+
       function addQuickTasks() {
         const raw = quickTaskInput.value.trim();
         if (!raw) {
@@ -1902,6 +1929,7 @@
         ensureWorkspaceExists();
         renderPlan();
       }
+      ensureTodayRoutineOnBoard();
       renderRoutinePanel();
     </script>
   </body>
