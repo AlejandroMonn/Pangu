@@ -272,13 +272,6 @@
               <div class="rounded-2xl border border-fuchsia-300/20 bg-black/15 p-4">
                 <p class="text-[11px] uppercase tracking-[0.18em] text-fuchsia-100">Rutina de hoy</p>
                 <h4 id="todayRoutineTitle" class="mt-1 text-lg font-semibold text-white"></h4>
-                <button
-                  id="addTodayRoutineToBoardBtn"
-                  type="button"
-                  class="mt-3 inline-flex items-center justify-center rounded-xl bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 active:scale-[0.99]"
-                >
-                  Pasar rutina de hoy al tablero
-                </button>
                 <div id="todayRoutineList" class="mt-4 space-y-2"></div>
               </div>
             </div>
@@ -418,7 +411,6 @@
       const todayRoutineTitle = document.getElementById('todayRoutineTitle');
       const todayRoutineList = document.getElementById('todayRoutineList');
       const todayRoutineCount = document.getElementById('todayRoutineCount');
-      const addTodayRoutineToBoardBtn = document.getElementById('addTodayRoutineToBoardBtn');
 
       const WORKSPACE_STORAGE_KEY = 'chaos-triage:workspace:v1';
       const WEEKLY_ROUTINE_STORAGE_KEY = 'pangu:weekly-routine:v1';
@@ -585,9 +577,16 @@
         };
       }
 
+      function isRoutineBoardTask(task) {
+        const id = String(task?.client_id || task?.task_id || '');
+        return id.startsWith('routine-board:');
+      }
+
       function hydratePlan(data) {
         const rawTasks = Array.isArray(data?.tasks) ? data.tasks : [];
-        const tasks = rawTasks.map((task, index) => hydrateTask(task, index));
+        const tasks = rawTasks
+          .filter((task) => !isRoutineBoardTask(task))
+          .map((task, index) => hydrateTask(task, index));
         return {
           summary: data?.summary || 'Tu tablero sigue vivo localmente para que no pierdas el hilo del día.',
           coach: data?.coach || {
@@ -795,12 +794,6 @@
           });
         });
 
-        routineEditorList.querySelectorAll('[data-routine-add-board]').forEach((button) => {
-          button.addEventListener('click', () => {
-            addRoutineItemsToBoard([button.dataset.routineAddBoard], selectedRoutineDay);
-          });
-        });
-
         routineEditorList.querySelectorAll('[data-routine-delete]').forEach((button) => {
           button.addEventListener('click', () => {
             const id = button.dataset.routineDelete;
@@ -839,7 +832,6 @@
                 </div>
               </div>
               <div class="flex shrink-0 flex-wrap gap-2 text-xs">
-                <button type="button" data-routine-add-board="${escapeHtml(task.id)}" class="rounded-full bg-cyan-500/15 px-3 py-1 text-cyan-100 transition hover:bg-cyan-500/25">Al tablero</button>
                 <button type="button" data-routine-toggle-edit="${escapeHtml(task.id)}" class="rounded-full bg-fuchsia-500/15 px-3 py-1 text-fuchsia-100 transition hover:bg-fuchsia-500/25">Editar</button>
                 <button type="button" data-routine-delete="${escapeHtml(task.id)}" class="rounded-full bg-rose-500/15 px-3 py-1 text-rose-200 transition ${lockedClass}">Eliminar</button>
               </div>
@@ -911,9 +903,6 @@
         const missingTasks = (weeklyRoutine[selectedRoutineDay] || []).filter((task) => !orderedIds.includes(task.id));
         weeklyRoutine[selectedRoutineDay] = [...orderedTasks, ...missingTasks];
         saveWeeklyRoutine();
-        if (selectedRoutineDay === todayRoutineDayKey()) {
-          syncTodayRoutineBoardOrder();
-        }
         renderRoutinePanel();
       }
 
@@ -974,10 +963,8 @@
         const missingTasks = (weeklyRoutine[todayKey] || []).filter((task) => !orderedIds.includes(task.id));
         weeklyRoutine[todayKey] = [...orderedTasks, ...missingTasks];
         saveWeeklyRoutine();
-        syncTodayRoutineBoardOrder();
         renderRoutineEditor();
         renderTodayRoutine();
-        ensureTodayRoutineOnBoard();
       }
 
       function initTodayRoutineSortable() {
@@ -1019,7 +1006,6 @@
                       <span class="mt-1 block text-xs text-slate-400">${task.estimated_minutes} min · ${escapeHtml(task.topic)}${task.mandatory ? ' · obligatoria' : ''}</span>
                     </span>
                   </div>
-                  <button type="button" data-routine-add-today="${escapeHtml(task.id)}" class="ml-20 mt-2 rounded-full bg-cyan-500/15 px-3 py-1 text-xs text-cyan-100 transition hover:bg-cyan-500/25">Agregar al tablero</button>
                 </div>
               `;
             }).join('')
@@ -1031,12 +1017,6 @@
             nextDoneState[checkbox.dataset.routineCheck] = checkbox.checked;
             saveTodayRoutineDone(nextDoneState);
             renderTodayRoutine();
-          });
-        });
-
-        todayRoutineList.querySelectorAll('[data-routine-add-today]').forEach((button) => {
-          button.addEventListener('click', () => {
-            addRoutineItemsToBoard([button.dataset.routineAddToday], todayKey);
           });
         });
 
@@ -1079,9 +1059,6 @@
         routineTaskInput.value = '';
         clearRoutineMessage();
         renderRoutinePanel();
-        if (selectedRoutineDay === todayRoutineDayKey()) {
-          addRoutineItemsToBoard(newRoutineTasks.map((task) => task.id), selectedRoutineDay);
-        }
         setRoutineMessage(entries.length === 1 ? 'Rutina agregada.' : `${entries.length} rutinas agregadas.`);
       }
 
@@ -1856,114 +1833,6 @@
         }, highestStep + indexOffset);
       }
 
-      function createRoutineBoardTask(routineTask, dayKey, indexOffset) {
-        const highestStep = currentPlan.tasks.reduce((max, task) => Math.max(max, Number(task.step_number) || 0), 0);
-        const dayLabel = routineDayLabel(dayKey);
-        return hydrateTask({
-          client_id: routineBoardTaskId(routineTask.id),
-          step_number: highestStep + indexOffset + 1,
-          title: routineTask.title,
-          details: `${routineTask.details || routineTask.title} (${dayLabel})`,
-          first_move: routineTask.first_move || routineTask.title,
-          topic: routineTask.topic || 'Rutina',
-          urgency: routineTask.mandatory ? 'high' : 'medium',
-          energy_level: routineTask.energy_level || 'medium',
-          estimated_minutes: routineTask.estimated_minutes || 20,
-          reason: routineTask.mandatory
-            ? 'Rutina obligatoria de todos los días.'
-            : `Rutina programada para ${dayLabel}.`,
-          lane: 'suggested'
-        }, highestStep + indexOffset);
-      }
-
-      function routineBoardTaskId(routineTaskId) {
-        return `routine-board:${todayDateKey()}:${routineTaskId}`;
-      }
-
-      function syncTodayRoutineBoardOrder() {
-        if (!currentPlan) return;
-        const todayKey = todayRoutineDayKey();
-        const orderedBoardIds = (weeklyRoutine[todayKey] || []).map((task) => routineBoardTaskId(task.id));
-        const routineIdSet = new Set(orderedBoardIds);
-
-        BOARD_COLUMNS.forEach((column) => {
-          const columnRoutineIds = orderedBoardIds.filter((id) => boardState[column].includes(id));
-          if (!columnRoutineIds.length) return;
-          const nonRoutineIds = boardState[column].filter((id) => !routineIdSet.has(id));
-          boardState[column] = [...columnRoutineIds, ...nonRoutineIds];
-        });
-
-        deriveStatusFromColumns();
-        persistState();
-      }
-
-      function addRoutineItemsToBoard(routineIds, dayKey) {
-        const tasks = weeklyRoutine[dayKey] || [];
-        const selectedTasks = tasks.filter((task) => routineIds.includes(task.id));
-        if (!selectedTasks.length) {
-          setRoutineMessage('No encontré esa rutina para pasarla al tablero.', 'error');
-          return;
-        }
-
-        ensureWorkspaceExists();
-        const existingIds = new Set(currentPlan.tasks.map((task) => taskId(task)));
-        const newTasks = selectedTasks
-          .map((task, index) => createRoutineBoardTask(task, dayKey, index))
-          .filter((task) => !existingIds.has(taskId(task)));
-
-        if (!newTasks.length) {
-          setRoutineMessage('Esa rutina ya está en el tablero de hoy.', 'error');
-          return;
-        }
-
-        currentPlan.tasks = [...newTasks, ...currentPlan.tasks];
-        currentPlan.topics = uniqueTopics([...currentPlan.topics, ...newTasks.map((task) => task.topic)]);
-        setTaskMap(currentPlan.tasks);
-        boardState.backlog = dedupe([...newTasks.map((task) => taskId(task)), ...boardState.backlog]);
-        deriveStatusFromColumns();
-        if (dayKey === todayRoutineDayKey()) syncTodayRoutineBoardOrder();
-        hasInteracted = true;
-        persistState();
-        renderPlan();
-        renderRoutinePanel();
-        setRoutineMessage(newTasks.length === 1
-          ? 'Rutina agregada al tablero como tarea ajustable.'
-          : `${newTasks.length} rutinas agregadas al tablero como tareas ajustables.`);
-      }
-
-      function addTodayRoutineToBoard() {
-        const todayKey = todayRoutineDayKey();
-        const ids = (weeklyRoutine[todayKey] || []).map((task) => task.id);
-        if (!ids.length) {
-          setRoutineMessage('No hay rutina programada para hoy.', 'error');
-          return;
-        }
-        addRoutineItemsToBoard(ids, todayKey);
-      }
-
-      function ensureTodayRoutineOnBoard() {
-        const todayKey = todayRoutineDayKey();
-        const tasks = weeklyRoutine[todayKey] || [];
-        if (!tasks.length) return;
-
-        ensureWorkspaceExists();
-        const existingIds = new Set(currentPlan.tasks.map((task) => taskId(task)));
-        const missingRoutineTasks = tasks
-          .map((task, index) => createRoutineBoardTask(task, todayKey, index))
-          .filter((task) => !existingIds.has(taskId(task)));
-
-        if (!missingRoutineTasks.length) return;
-
-        currentPlan.tasks = [...missingRoutineTasks, ...currentPlan.tasks];
-        currentPlan.topics = uniqueTopics([...currentPlan.topics, ...missingRoutineTasks.map((task) => task.topic)]);
-        setTaskMap(currentPlan.tasks);
-        boardState.backlog = dedupe([...missingRoutineTasks.map((task) => taskId(task)), ...boardState.backlog]);
-        deriveStatusFromColumns();
-        hasInteracted = true;
-        persistState();
-        renderPlan();
-      }
-
       function addQuickTasks() {
         const raw = quickTaskInput.value.trim();
         if (!raw) {
@@ -2045,7 +1914,6 @@
 
       organizeBtn.addEventListener('click', runTriage);
       quickAddBtn.addEventListener('click', addQuickTasks);
-      addTodayRoutineToBoardBtn.addEventListener('click', addTodayRoutineToBoard);
       quickTaskInput.addEventListener('input', clearQuickMessage);
       quickTaskInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
@@ -2078,7 +1946,6 @@
         ensureWorkspaceExists();
         renderPlan();
       }
-      ensureTodayRoutineOnBoard();
       renderRoutinePanel();
     </script>
   </body>
